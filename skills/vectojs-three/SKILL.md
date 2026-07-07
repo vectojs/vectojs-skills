@@ -35,3 +35,21 @@ Read `references/three-recipes.md` for snippets.
 | Dispatching by screen coordinates             | Use raycast UVs through `ThreeAdapter`.                                          |
 | Keeping disposed textures alive               | Call `adapter.dispose()` and remove host references.                             |
 | Expecting full DOM a11y inside XR             | Treat the 3D panel as canvas texture; provide host-level semantics where needed. |
+
+## Version and backend gotchas (source-verified)
+
+- **three ≤ 0.1.3**: `ThreeRenderer.flush()` performed a full GL render, and
+  the Scene flushes around every non-batched node — frame cost grew O(N²) in
+  entity count. Later versions render once per frame via the `present()` hook;
+  upgrade before profiling anything else.
+- **Native input inside a texture is limited.** The adapter's canvas is
+  offscreen, so the Scene's projected a11y elements are never connected to the
+  document; `updateIntersection` falls back to VectoJS's own event dispatch.
+  Buttons/hover/wheel work; full native IME/text editing does not — keep text
+  entry outside the 3D panel or accept simplified input.
+- **`stroke()` line width is effectively 1px** on most platforms
+  (`LineBasicMaterial.linewidth` is a known WebGL limitation). Draw thick
+  lines as filled shapes instead.
+- `ThreeRenderer.fillText`/`drawImage` allocate a texture per call per frame
+  (disposed on `clear()`); heavy HUD text is cheaper via `MSDFTextEntity` or
+  by pre-rendering to a canvas you reuse.

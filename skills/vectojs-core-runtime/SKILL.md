@@ -35,6 +35,33 @@ For copyable examples, read `references/scene-recipes.md`.
 | Forgetting teardown                   | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.      |
 | Custom canvas input for text          | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native. |
 | Rebuilding text every frame           | Reuse entities and update width/content through the hot APIs where available.            |
+| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them. |
+
+## Runtime gotchas (source-verified)
+
+- **Animating from `update()` needs `hasPendingAnimations()`.** The Scene's
+  idle throttle and onDemand skip only keep rendering while some node reports
+  a pending animation; `markDirty()` called *inside* `update()` is wiped by
+  the loop's own end-of-tick `dirty = false`. A custom entity that integrates
+  its own motion in `update()` (hand-rolled spring/velocity/lerp) steps at
+  ~2 FPS once the throttle engages — or stalls in onDemand mode — unless it
+  overrides `hasPendingAnimations()` to report "still moving", or drives the
+  motion through `setTransition`/`animateTo`/`springTo` instead. This exact
+  bug shipped three separate times (ScrollView, VirtualList, TreeView).
+- **onDemand + `autoThrottle: false`**: on core ≤ 0.2.5 this combination
+  silently disables the onDemand frame skip (renders every rAF). Fixed in
+  later patches; on older versions leave `autoThrottle` at its default.
+- **Embedded (non-fullscreen) canvases**: pass `disableWindowResize: true`.
+  On core ≤ 0.2.5 also call `scene.resize(w, h)` immediately after
+  construction — the default renderer sized the canvas to the window anyway.
+- **Custom `IRenderer` implementers**: `flush()` runs around *every*
+  non-batched node each frame — it must only commit the pending primitive
+  batch (near-zero cost when empty). Do end-of-frame work (a real GL render)
+  in the optional `present()` hook, called exactly once per render pass.
+- **Springs vs background tabs**: on core ≤ 0.2.5, `springTo` /
+  `setTransition('spring')` integrated the raw rAF `dt`, so returning from a
+  background tab (multi-second dt) made in-flight springs diverge violently.
+  Later patches substep the integration.
 
 ## Verification
 

@@ -36,6 +36,8 @@ Read `references/layout-recipes.md` for copyable patterns.
 | ScrollView inside another wheel-capturing region | Give each wheel gesture one owner or define escape behavior.        |
 | Fixed desktop-only coordinates                   | Add breakpoint functions and test narrow, wide, and zoomed layouts. |
 | Changing child size without relayout             | Call `stack.layout()` / equivalent and mark dirty.                  |
+| Growing ScrollView content without re-measuring  | `scrollView.add()` measures automatically, but mutating an existing child's size needs `scrollView.updateContentSize()` or the max-scroll clamp goes stale. |
+| Guessing `estimatedRowHeight` for fixed-height `VirtualList` rows | Set it to the exact row height — the estimate only exists for variable rows (measured heights are cached per index); `setItems()` resets scroll and that cache. |
 
 ## Verification
 

@@ -29,6 +29,9 @@ Read `references/performance-checklist.md` for concrete probes and fixes.
 | 100k points slow              | renderer       | WebGL point backend if draw cost dominates                               |
 | Particle simulation slow      | compute        | WebGPU only if compute is parallel and supported                         |
 | Memory grows after navigation | lifecycle      | `scene.destroy()`, remove observers/timers, dispose adapters/export jobs |
+| Animation steps/stutters only when the page is otherwise idle | throttle visibility | The entity animates from `update()` without overriding `hasPendingAnimations()` — the idle throttle can't see it. Use `setTransition`/`springTo`, or override it. |
+| MSDF text slow / wrong glyphs with two fonts | GL text path | On core ≤ 0.2.5 the atlas re-uploads every frame and one atlas slot is shared (a second font corrupts glyphs) — upgrade; on old versions keep one MSDF font per scene. |
+| `@vectojs/three` slows down as entity count grows | renderer flush | On three ≤ 0.1.3 every Scene flush was a full GL render → O(N²)/frame. Upgrade (single `present()` render). |
 
 ## Compute greater than render
 
@@ -45,3 +48,9 @@ bun run compare
 ```
 
 Treat demo entity counts as workload examples, not universal promises.
+
+**Measure on a real GPU.** Headless Chromium rasterizes in software — its FPS
+numbers are a hard floor, not a measurement. Quote numbers captured in-page on
+real hardware (the demos' "Export report" button), and record DPR: headless
+defaults to DPR 1 while most dev machines are HiDPI, which also hides
+hit-testing offsets that only appear at `deviceScaleFactor: 2`.

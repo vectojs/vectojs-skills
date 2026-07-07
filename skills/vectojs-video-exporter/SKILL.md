@@ -28,6 +28,11 @@ Read `references/export-recipes.md` for CLI/API snippets.
 - Frame count is `Math.ceil(fps * duration)`.
 - Failed or aborted exports preserve an existing destination and remove incomplete staged files.
 - SIGINT/SIGTERM clean up Chromium, Vite, FFmpeg, progress output, and staged files.
+- Capture runs at `deviceScaleFactor: 1` — output resolution equals `width`×`height`
+  exactly, independent of the host machine's DPR.
+- The exporter calls `scene.stop()` itself, then drives `step(dt)` per frame;
+  the page only needs to expose the scene, not manage the loop. `step()` uses
+  the Scene's main renderer, so particle simulations advance deterministically.
 
 ## Sandbox policy
 
