@@ -44,13 +44,15 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Rebuilding a whole component tree for every state change.
 - Hiding focus indicators on canvas controls.
 - Ignoring IME and clipboard behavior by faking text entry.
-- Hand-rolling per-frame motion in `update()` without overriding
-  `hasPendingAnimations()` — invisible to the idle throttle, so the animation
-  steps at 2 FPS or stalls in onDemand mode. Prefer
-  `setTransition`/`animateTo`/`springTo`; see vectojs-core-runtime's
-  "Runtime gotchas" for why.
+- Hand-rolling per-frame motion in `update()` without telling the Scene —
+  invisible to the idle throttle, so the animation steps at 2 FPS or stalls
+  in onDemand mode. Prefer `setTransition`/`animateTo`/`springTo` or override
+  `hasPendingAnimations()`; on core 0.2.6+ `markDirty()` inside `update()`
+  also works. See vectojs-core-runtime's "Runtime gotchas".
 - Relying on in-flight springs across tab switches on core ≤ 0.2.5 — the
-  unclamped rAF `dt` made them diverge; later patches substep. If stuck on an
+  unclamped rAF `dt` made them diverge; core 0.2.6 substeps. If stuck on an
   old core, re-seed positions on `visibilitychange`.
 - Creating a new `Tooltip` per hover event instead of one per target (and on
-  ui ≤ 0.2.5, rapid re-hovers stacked show timers — upgrade or debounce).
+  ui ≤ 0.2.5, rapid re-hovers stacked show timers — fixed in ui 0.2.6).
+- Reimplementing slider keyboard handling — ui 0.2.6's `Slider` handles
+  Arrow/Home/End itself and takes a `step` option (integer-only before).

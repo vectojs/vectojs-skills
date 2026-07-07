@@ -39,21 +39,22 @@ For copyable examples, read `references/scene-recipes.md`.
 
 ## Runtime gotchas (source-verified)
 
-- **Animating from `update()` needs `hasPendingAnimations()`.** The Scene's
-  idle throttle and onDemand skip only keep rendering while some node reports
-  a pending animation; `markDirty()` called *inside* `update()` is wiped by
-  the loop's own end-of-tick `dirty = false`. A custom entity that integrates
-  its own motion in `update()` (hand-rolled spring/velocity/lerp) steps at
-  ~2 FPS once the throttle engages — or stalls in onDemand mode — unless it
-  overrides `hasPendingAnimations()` to report "still moving", or drives the
-  motion through `setTransition`/`animateTo`/`springTo` instead. This exact
-  bug shipped three separate times (ScrollView, VirtualList, TreeView).
+- **Animating from `update()`**: prefer overriding `hasPendingAnimations()`
+  to report "still moving", or drive motion through
+  `setTransition`/`animateTo`/`springTo`. On core **0.2.6+**, `markDirty()`
+  called *inside* `update()` also works (the dirty flag is consumed before
+  the update/render pass, so the mark survives to the next frame). On core
+  **≤ 0.2.5** it was wiped by the loop's end-of-tick `dirty = false`, so an
+  update()-integrating entity stepped at ~2 FPS once the throttle engaged —
+  or stalled in onDemand mode. That exact bug shipped three separate times
+  (ScrollView, VirtualList, TreeView).
 - **onDemand + `autoThrottle: false`**: on core ≤ 0.2.5 this combination
   silently disables the onDemand frame skip (renders every rAF). Fixed in
-  later patches; on older versions leave `autoThrottle` at its default.
+  core 0.2.6; on older versions leave `autoThrottle` at its default.
 - **Embedded (non-fullscreen) canvases**: pass `disableWindowResize: true`.
   On core ≤ 0.2.5 also call `scene.resize(w, h)` immediately after
-  construction — the default renderer sized the canvas to the window anyway.
+  construction — the default renderer sized the canvas to the window anyway
+  (fixed in core 0.2.6).
 - **Custom `IRenderer` implementers**: `flush()` runs around *every*
   non-batched node each frame — it must only commit the pending primitive
   batch (near-zero cost when empty). Do end-of-frame work (a real GL render)
@@ -61,7 +62,10 @@ For copyable examples, read `references/scene-recipes.md`.
 - **Springs vs background tabs**: on core ≤ 0.2.5, `springTo` /
   `setTransition('spring')` integrated the raw rAF `dt`, so returning from a
   background tab (multi-second dt) made in-flight springs diverge violently.
-  Later patches substep the integration.
+  Core 0.2.6 substeps the integration.
+- **`destroy()` and animation promises**: on core ≤ 0.2.5, promises from
+  `animateTo`/`springTo` never settled if the entity was destroyed mid-flight
+  (awaiting exit sequences hung). Core 0.2.6 resolves them on `destroy()`.
 
 ## Verification
 

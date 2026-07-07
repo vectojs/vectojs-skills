@@ -40,7 +40,7 @@ Read `references/three-recipes.md` for snippets.
 
 - **three ≤ 0.1.3**: `ThreeRenderer.flush()` performed a full GL render, and
   the Scene flushes around every non-batched node — frame cost grew O(N²) in
-  entity count. Later versions render once per frame via the `present()` hook;
+  entity count. three 0.1.4 renders once per frame via the `present()` hook;
   upgrade before profiling anything else.
 - **Native input inside a texture is limited.** The adapter's canvas is
   offscreen, so the Scene's projected a11y elements are never connected to the
@@ -50,6 +50,7 @@ Read `references/three-recipes.md` for snippets.
 - **`stroke()` line width is effectively 1px** on most platforms
   (`LineBasicMaterial.linewidth` is a known WebGL limitation). Draw thick
   lines as filled shapes instead.
-- `ThreeRenderer.fillText`/`drawImage` allocate a texture per call per frame
-  (disposed on `clear()`); heavy HUD text is cheaper via `MSDFTextEntity` or
-  by pre-rendering to a canvas you reuse.
+- `ThreeRenderer.drawImage` allocates a texture per call per frame (disposed
+  on `clear()`); reuse a source canvas where possible. `fillText` is cached
+  from three 0.1.4 (LRU keyed by font|color|text, 256 entries) — on ≤ 0.1.3 it
+  had the same per-call cost, so prefer `MSDFTextEntity` there.
