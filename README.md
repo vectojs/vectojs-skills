@@ -11,12 +11,14 @@ This repository is a skills catalog for AI coding agents such as Codex, Claude C
 
 | Skill                       | Use it for                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `vectojs-paradigm`          | Read FIRST: replaces HTML/CSS instincts with scene-graph thinking and the state-space debugging ladder  |
 | `vectojs-core-runtime`      | Core `Scene`/`Entity` architecture, semantic projection, lifecycle, and framework integration           |
 | `vectojs-responsive-layout` | Adaptive canvas layouts, resize/zoom handling, `Stack`/`Flow`, scroll regions, and layout boundaries    |
 | `vectojs-ui-animation`      | Polished `@vectojs/ui` components, forms, overlays, UX states, and animation/microinteraction patterns  |
 | `vectojs-performance`       | Profiling, compute-vs-render tradeoffs, text/layout cost, large scenes, batching, and backend selection |
 | `vectojs-three`             | `@vectojs/three`, Three.js/WebXR panels, raycast input routing, texture sync, and disposal              |
 | `vectojs-video-exporter`    | Deterministic MP4 export, CLI/API usage, fixed-step scene contracts, Chromium/FFmpeg, and cancellation  |
+| `vectojs-devtools`          | `@vectojs/devtools` VMT inspector: entity tree, click-to-pick, geometry readouts, headless model APIs   |
 
 ## Install with `skills`
 
