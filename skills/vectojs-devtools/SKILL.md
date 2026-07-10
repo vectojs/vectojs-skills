@@ -3,7 +3,7 @@ name: vectojs-devtools
 description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.2.0+)
+# VectoJS Devtools (@vectojs/devtools, 0.3.0+)
 
 An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
 The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
@@ -17,6 +17,7 @@ import { attachDevtools } from "@vectojs/devtools";
 const devtools = attachDevtools(scene, {
   width: 320, // panel width px (default 320)
   refreshInterval: 500, // auto-refresh ms while open; 0 disables (default 500)
+  traceEvents: true, // opt-in pointer/wheel/keyboard routing trace
 });
 // …
 devtools.detach(); // alias for panel.destroy(); always call on unmount
@@ -37,6 +38,9 @@ devtools.detach(); // alias for panel.destroy(); always call on unmount
 - **Detail readout + nudging** — position/size/opacity/flags; arrow keys nudge
   `x/y` live (careful: while a devtools selection exists, arrows are consumed —
   in apps with their own keyboard nav, deselect or detach first).
+- **Event trace (0.3.0)** — opt-in bounded recent-event view. It shows pointer,
+  wheel, and keyboard type/source/target summaries after application handlers
+  run, including whether the browser default was prevented.
 
 ## Headless / programmatic use (preferred for agents)
 
@@ -45,13 +49,22 @@ Query numbers instead of taking screenshots.
 
 ```ts
 import {
-  buildTreeModel, pickInScene,               // 0.1.x
-  inspectEntity, entityPath,                 // 0.2.0
-  auditScene, captureSnapshot, diffSnapshots // 0.2.0
+  buildTreeModel,
+  pickInScene, // 0.1.x
+  inspectEntity,
+  entityPath, // 0.2.0
+  auditScene,
+  captureSnapshot,
+  diffSnapshots, // 0.2.0
+  createEventTrace, // 0.3.0
 } from "@vectojs/devtools";
 
-const hit = pickInScene(scene, x, y);        // which entity owns this point?
-if (hit) console.log(inspectEntity(hit));    // structured EntityInfo (JSON-safe)
+const hit = pickInScene(scene, x, y); // which entity owns this point?
+if (hit) console.log(inspectEntity(hit)); // structured EntityInfo (JSON-safe)
+
+const trace = createEventTrace(scene, { capacity: 50 });
+trace.subscribe((entry) => console.log(entry.type, entry.targetPath));
+// trace.entries is JSON-safe and oldest-to-newest; trace.destroy() removes listeners.
 ```
 
 `inspectEntity` is the structured replacement for `describeEntity` (which still
@@ -59,14 +72,23 @@ exists, returning human-readable lines): world bounds + transform, flags,
 `clipChildren`, child count, a duck-typed text preview (`.text` / `.value`),
 and a11y projection attributes when present.
 
+`createEventTrace` observes the document at capture phase but never installs VMT
+listeners or changes dispatch. A projected a11y id resolves first; canvas
+pointer input falls back to `pickInScene`; global keyboard routers are reported
+as `source: "document"` when no entity owns the focused element. Entries retain
+only scalar state, not DOM events or entity references. `defaultPrevented` is
+read after the browser dispatch completes, so it reports the final application
+decision. Keep the trace opt-in and destroy it outside the normal devtools panel
+life cycle.
+
 ## Scene auditing (0.2.0)
 
 ```ts
 const findings = auditScene(scene, {
-  tolerance: 0.5,          // px slack before an escape/overlap counts
-  includeOverlay: false,   // overlay (modals/highlights) excluded by default
-  ignore: (e) => e.id.startsWith("debug-"),        // prune subtrees
-  ignoreOverlap: (a, b) => a.id === "badge",       // allow intentional stacking
+  tolerance: 0.5, // px slack before an escape/overlap counts
+  includeOverlay: false, // overlay (modals/highlights) excluded by default
+  ignore: (e) => e.id.startsWith("debug-"), // prune subtrees
+  ignoreOverlap: (a, b) => a.id === "badge", // allow intentional stacking
 });
 // -> AuditFinding[]: { kind, entityId, entityPath, worldBounds, message,
 //    containerBounds?, overflow?{left,right,top,bottom}, otherId?, intersection? }
@@ -92,7 +114,7 @@ Deliberate blind spots to know about: scrollable containers (`ScrollView`,
 ## Snapshots & diffs (0.2.0)
 
 ```ts
-const before = captureSnapshot(scene);  // deterministic JSON tree of the whole scene
+const before = captureSnapshot(scene); // deterministic JSON tree of the whole scene
 // … perform an interaction …
 const diffs = diffSnapshots(before, captureSnapshot(scene));
 // -> [{ path: "root > GridEntity[0]", kind: "changed", changes: { x: {from,to} } }]
