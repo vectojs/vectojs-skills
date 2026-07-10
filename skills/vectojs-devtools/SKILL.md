@@ -1,13 +1,13 @@
 ---
 name: vectojs-devtools
-description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
+description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.1.0+)
+# VectoJS Devtools (@vectojs/devtools, 0.2.0+)
 
-An in-page Virtual Math Tree inspector. The panel itself is a VectoJS Scene
-(dogfooding `@vectojs/ui`), docked to the right edge of the page. Peer deps:
-`@vectojs/core >=0.2.7`, `@vectojs/ui >=0.2.7`.
+An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
+The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
+right edge of the page. Peer deps: `@vectojs/core >=1.0.0`, `@vectojs/ui >=1.0.0`.
 
 ## Attach / detach
 
@@ -26,34 +26,82 @@ devtools.detach(); // alias for panel.destroy(); always call on unmount
 
 ## What the panel gives you
 
-- **Entity tree** — live VMT view built from `scene.rootEntity` / `scene.overlayRootEntity`
-  (public getters since core 0.2.8). Labels show `type (x,y) w×h` plus ⚡ (interactive)
-  and ▶ (animating) markers.
-- **Pick mode** — click any pixel on the host canvas; deepest entity wins
-  (`isPointInside`, falling back to world-AABB via `worldToLocal`). Overlay root is
-  checked before the main root.
-- **Selection highlight** — drawn through the host scene's overlay, so it never
-  pollutes the app's own tree.
-- **Detail readout + nudging** — position/size/opacity/flags for the selected entity;
-  arrow keys nudge `x/y` live for alignment tuning.
+- **Entity tree** — live VMT view built from `scene.rootEntity` / `scene.overlayRootEntity`.
+  Labels show `type (x,y) w×h` plus ⚡ (interactive) and ▶ (animating) markers.
+- **Pick mode** — click any pixel on the host canvas; deepest entity wins.
+- **Audit button (0.2.0)** — runs `auditScene` and lists findings in place of the
+  tree; selecting a finding selects + highlights the offending entity. `Refresh`
+  restores the normal tree. Programmatic: `panel.audit()` returns the findings,
+  `panel.selectFinding(i)` selects one.
+- **Selection highlight** — drawn through the host scene's overlay.
+- **Detail readout + nudging** — position/size/opacity/flags; arrow keys nudge
+  `x/y` live (careful: while a devtools selection exists, arrows are consumed —
+  in apps with their own keyboard nav, deselect or detach first).
 
 ## Headless / programmatic use (preferred for agents)
 
-You rarely need the visual panel: the model layer is exported and works in tests
-and Node/jsdom. This is the state-space debugging path — query numbers instead of
-taking screenshots:
+You rarely need the visual panel: the model layer works in tests and jsdom.
+Query numbers instead of taking screenshots.
 
 ```ts
-import { buildTreeModel, describeEntity, pickInScene } from "@vectojs/devtools";
+import {
+  buildTreeModel, pickInScene,               // 0.1.x
+  inspectEntity, entityPath,                 // 0.2.0
+  auditScene, captureSnapshot, diffSnapshots // 0.2.0
+} from "@vectojs/devtools";
 
-const { nodes, index } = buildTreeModel(scene.rootEntity); // serializable tree
-const hit = pickInScene(scene, x, y); // which entity owns this point?
-if (hit) console.log(describeEntity(hit)); // geometry/state lines
+const hit = pickInScene(scene, x, y);        // which entity owns this point?
+if (hit) console.log(inspectEntity(hit));    // structured EntityInfo (JSON-safe)
 ```
 
-Use `pickInScene` to answer "what did the user actually click?" and
-`describeEntity` to compare expected vs. actual geometry — the discrepancy usually
-names the bug directly (see the `vectojs-paradigm` skill's debugging ladder).
+`inspectEntity` is the structured replacement for `describeEntity` (which still
+exists, returning human-readable lines): world bounds + transform, flags,
+`clipChildren`, child count, a duck-typed text preview (`.text` / `.value`),
+and a11y projection attributes when present.
+
+## Scene auditing (0.2.0)
+
+```ts
+const findings = auditScene(scene, {
+  tolerance: 0.5,          // px slack before an escape/overlap counts
+  includeOverlay: false,   // overlay (modals/highlights) excluded by default
+  ignore: (e) => e.id.startsWith("debug-"),        // prune subtrees
+  ignoreOverlap: (a, b) => a.id === "badge",       // allow intentional stacking
+});
+// -> AuditFinding[]: { kind, entityId, entityPath, worldBounds, message,
+//    containerBounds?, overflow?{left,right,top,bottom}, otherId?, intersection? }
+```
+
+Detects four kinds, deterministically sorted and JSON-safe:
+
+- `text-overflow` — a text-bearing entity's measured box escapes its nearest
+  sized ancestor. (ui `Text` self-sizes: its width/height ARE the measured
+  content, so escaping the container means "the text doesn't fit".)
+- `clip-overflow` — content escapes a `clipChildren` ancestor = pixels cut off.
+- `overlap` — **siblings only** (parent-child containment is normal; cross-branch
+  stacking belongs on the overlay, which is excluded by default).
+- `viewport-overflow` — entity with no sized ancestor drawn outside the canvas.
+
+Deliberate blind spots to know about: scrollable containers (`ScrollView`,
+`VirtualList`, `TreeView`, `Tree` — override via `scrollableTypes`, matched by
+`constructor.name`, so minified bundles need explicit names) exempt the
+**vertical** axis; `opacity: 0` entities are skipped entirely.
+
+**CI gate pattern**: `expect(auditScene(scene)).toEqual([])` — "audit clean".
+
+## Snapshots & diffs (0.2.0)
+
+```ts
+const before = captureSnapshot(scene);  // deterministic JSON tree of the whole scene
+// … perform an interaction …
+const diffs = diffSnapshots(before, captureSnapshot(scene));
+// -> [{ path: "root > GridEntity[0]", kind: "changed", changes: { x: {from,to} } }]
+```
+
+Diffs are keyed by **structural path** (`type[index]` chains), never by entity
+id — ids are random per run. Default-valued props (opacity 1, flags false) are
+omitted from snapshots so JSON diffs stay quiet. Use snapshot-pairs as golden-
+state assertions in smoke tests.
 
 ## Gotchas
 
@@ -62,4 +110,6 @@ names the bug directly (see the `vectojs-paradigm` skill's debugging ladder).
 - `refreshInterval` polls; for deterministic tests set it to `0` and call the model
   functions yourself.
 - Devtools is a dev dependency by nature — gate `attachDevtools` behind a dev flag
-  so it never ships to production bundles.
+  (e.g. `location.search.includes("debug")`) so it never ships to production bundles.
+- In audit tests under jsdom, use stub entities with explicit width/height — real
+  ui `Text` measurement is unreliable without a canvas rasterizer.
