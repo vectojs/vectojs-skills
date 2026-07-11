@@ -25,6 +25,7 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Use `Tooltip`, `Popover`, `ContextMenu`, and `Modal` for transient UI; keep dismissal behavior explicit.
 - Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
 - Prefer `Stack`/`Flow` composition over hand-positioning every child.
+- On `@vectojs/ui@1.6.1+`, use `@vectojs/ui/input` for Input-only code and `@vectojs/ui/measure` for measurement-only code; retain the root import for multi-component surfaces.
 
 ## Motion rules
 
