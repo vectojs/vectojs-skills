@@ -22,27 +22,47 @@ For copyable examples, read `references/scene-recipes.md`.
 
 - Treat VectoJS as a retained scene runtime, not a DOM component library.
 - Let canvas own pixels and let the semantic layer own role/name/state and native input.
+- Use `getContentProjection()` for searchable/copyable static text; never hand-author a sibling DOM text layer.
 - Keep application state outside the scene when possible; update entities from state and mark the scene dirty.
 - Use `Scene.step(dt)` for deterministic tests, simulations, and video export.
 - Keep custom entities small: render, hit-test, semantics, and lifecycle should stay understandable without reading the whole app.
 
 ## Common mistakes
 
-| Mistake                               | Correction                                                                               |
-| ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Passing `renderMode` to `new Scene()` | Create the scene, then set `scene.renderMode = 'onDemand'`.                              |
-| Pixel-coordinate tests for controls   | Use projected DOM roles for tests: `getByRole(...).click()`.                             |
-| Forgetting teardown                   | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.      |
-| Custom canvas input for text          | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native. |
-| Rebuilding text every frame           | Reuse entities and update width/content through the hot APIs where available.            |
+| Mistake                                                 | Correction                                                                                            |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                           |
+| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                          |
+| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                   |
+| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.              |
+| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                         |
 | Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them. |
+
+## Static text selection (Core 1.5+)
+
+```ts
+override getContentProjection() {
+  return { text: this.label, font: this.font, lineHeight: 24, selectable: true };
+}
+```
+
+The transparent projection supplies browser find, selection, and copy; VMT state
+still determines layout and pixels. Core keeps dynamic mirrors in tree order,
+removes them recursively, and hides them when fully outside the viewport or a
+`clipChildren` ancestor. Inspect a materialized mirror with
+`scene.getContentElement(entity.id)`. Do not claim whole-document find for
+virtualized or unmounted content.
+
+Application shortcut routers must yield native copy when
+`window.getSelection()?.isCollapsed === false` and must not suppress
+Ctrl/Command+F unless they intentionally replace browser find.
 
 ## Runtime gotchas (source-verified)
 
 - **Animating from `update()`**: prefer overriding `hasPendingAnimations()`
   to report "still moving", or drive motion through
   `setTransition`/`animateTo`/`springTo`. On core **0.2.6+**, `markDirty()`
-  called *inside* `update()` also works (the dirty flag is consumed before
+  called _inside_ `update()` also works (the dirty flag is consumed before
   the update/render pass, so the mark survives to the next frame). On core
   **≤ 0.2.5** it was wiped by the loop's end-of-tick `dirty = false`, so an
   update()-integrating entity stepped at ~2 FPS once the throttle engaged —
@@ -55,7 +75,7 @@ For copyable examples, read `references/scene-recipes.md`.
   On core ≤ 0.2.5 also call `scene.resize(w, h)` immediately after
   construction — the default renderer sized the canvas to the window anyway
   (fixed in core 0.2.6).
-- **Custom `IRenderer` implementers**: `flush()` runs around *every*
+- **Custom `IRenderer` implementers**: `flush()` runs around _every_
   non-batched node each frame — it must only commit the pending primitive
   batch (near-zero cost when empty). Do end-of-frame work (a real GL render)
   in the optional `present()` hook, called exactly once per render pass.
