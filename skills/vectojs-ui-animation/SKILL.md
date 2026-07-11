@@ -24,6 +24,8 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Use `Button`, `Toggle`, `Checkbox`, `Slider`, `Dropdown`, `RadioGroup`, and `Tabs` for controls with roles.
 - Use `Tooltip`, `Popover`, `ContextMenu`, and `Modal` for transient UI; keep dismissal behavior explicit.
 - Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
+- On `@vectojs/ui@1.7.0+`, Text, RichText, Markdown, CodeBlock, and Table cell text are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
+- Call `Table.layout()` after changing an external Entity cell. Table rendering is draw-only; string cells are Text entities and each logical cell owns one content projection.
 - Prefer `Stack`/`Flow` composition over hand-positioning every child.
 - On `@vectojs/ui@1.6.1+`, use `@vectojs/ui/input` for Input-only code and `@vectojs/ui/measure` for measurement-only code; retain the root import for multi-component surfaces.
 
@@ -45,6 +47,7 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Rebuilding a whole component tree for every state change.
 - Hiding focus indicators on canvas controls.
 - Ignoring IME and clipboard behavior by faking text entry.
+- Intercepting Ctrl/Command+C while `window.getSelection()?.isCollapsed === false`, which overwrites native static-text copy; likewise, do not prevent Ctrl/Command+F without a replacement find UI.
 - Hand-rolling per-frame motion in `update()` without telling the Scene —
   invisible to the idle throttle, so the animation steps at 2 FPS or stalls
   in onDemand mode. Prefer `setTransition`/`animateTo`/`springTo` or override
