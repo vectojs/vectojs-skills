@@ -2,11 +2,12 @@
 
 ## Lightweight single-purpose imports
 
-On `@vectojs/ui@1.6.1+`, focused consumers can avoid loading the rich-content
+On `@vectojs/ui@1.7.1+`, focused consumers can avoid loading the rich-content
 graph:
 
 ```ts
 import { Input, type InputOptions } from "@vectojs/ui/input";
+import { Text } from "@vectojs/ui/text";
 import { measureText, wrapLines } from "@vectojs/ui/measure";
 ```
 
