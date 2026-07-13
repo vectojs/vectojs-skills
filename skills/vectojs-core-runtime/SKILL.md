@@ -57,6 +57,48 @@ Application shortcut routers must yield native copy when
 `window.getSelection()?.isCollapsed === false` and must not suppress
 Ctrl/Command+F unless they intentionally replace browser find.
 
+### Exact Canvas-to-DOM text geometry
+
+Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
+a baseline, while CSS positions line boxes. For simple text, return a local
+`contentX`/`contentY` plus `baseline`. For text whose layout is already known,
+project each visual row so the browser cannot re-wrap it differently:
+
+```ts
+override getContentProjection() {
+  return {
+    text: 'small large',
+    selectable: true,
+    lines: [{
+      text: 'small large', x: 18, y: 12, baseline: 25,
+      font: '28px sans-serif', lineHeight: 42,
+      runs: [
+        { text: 'small ', font: '16px sans-serif' },
+        { text: 'large', font: 'bold 28px sans-serif' },
+      ],
+    }],
+  };
+}
+```
+
+`Scene` transforms those local offsets with the entity matrix and aligns CSS
+line boxes using `cssLineBoxBaseline(font, lineHeight)`. Use explicit lines for
+mixed-size `RichText`, code blocks with an inset, or any custom wrapping. Give
+every run the same visual line height; a CSS `font` shorthand otherwise resets
+its line height to `normal` and can reproduce Firefox overlap.
+
+For canvas-native editors, expose `textInputStyle: { font, lineHeight, padding
+}` from `getA11yAttributes()`. Scene applies it to the real `<input>` or
+`<textarea>` with `box-sizing: border-box`; draw the canvas text from the same
+`cssLineBoxBaseline()` and padding. Do not position the native editor with
+browser defaults.
+
+When selection, copy, or a caret appears displaced, inspect the materialized
+node with `scene.getContentElement(id)` / `scene.getA11yElement(id)`. Compare
+the Canvas baseline to the DOM line span's `getBoundingClientRect().top +
+cssLineBoxBaseline(computed.font, computed.lineHeight)` before changing fonts
+or adding ad-hoc CSS offsets.
+
 ## Runtime gotchas (source-verified)
 
 - **Animating from `update()`**: prefer overriding `hasPendingAnimations()`
