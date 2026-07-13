@@ -75,6 +75,22 @@ Do not install parallel `document` or canvas listeners for product interaction.
 Keep the transient preview outside durable history, then append one command only
 when the pointer stream commits.
 
+### Focusable canvas workspaces (Core 1.6.2+)
+
+A non-control interaction region does not become keyboard-focusable from
+`interactive = true` alone. Declare focus order through the semantic projection:
+
+```ts
+override getA11yAttributes() {
+  return { role: 'region', label: 'Design canvas', tabIndex: 0 };
+}
+```
+
+Listen for `keydown` on that Entity or an ancestor so shortcuts remain in VMT
+capture/bubble routing and DevTools tracing. Yield undo/redo, clipboard, and text
+editing shortcuts when the native target is an input, textarea, or editable
+content. Do not add a parallel document keyboard listener.
+
 ### Exact Canvas-to-DOM text geometry
 
 Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
