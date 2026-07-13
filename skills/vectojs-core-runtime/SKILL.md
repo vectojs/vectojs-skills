@@ -91,7 +91,7 @@ capture/bubble routing and DevTools tracing. Yield undo/redo, clipboard, and tex
 editing shortcuts when the native target is an input, textarea, or editable
 content. Do not add a parallel document keyboard listener.
 
-### Exact Canvas-to-DOM text geometry
+### Exact Canvas-to-DOM text geometry (Core 1.7+)
 
 Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
 a baseline, while CSS positions line boxes. For simple text, return a local
@@ -101,19 +101,39 @@ project each visual row so the browser cannot re-wrap it differently:
 ```ts
 override getContentProjection() {
   return {
-    text: 'small large',
+    // Always expose the logical Unicode source, never shaped visual glyph order.
+    text: 'مرحبا VectoJS alpha\nbeta',
     selectable: true,
-    lines: [{
-      text: 'small large', x: 18, y: 12, baseline: 25,
-      font: '28px sans-serif', lineHeight: 42,
-      runs: [
-        { text: 'small ', font: '16px sans-serif' },
-        { text: 'large', font: 'bold 28px sans-serif' },
-      ],
-    }],
+    lines: [
+      {
+        text: 'مرحبا VectoJS',
+        separatorAfter: ' ', // consumed soft-wrap source
+        x: 18, y: 12, baseline: 25,
+        font: '28px sans-serif', lineHeight: 42,
+      },
+      {
+        text: 'alpha',
+        separatorAfter: '\n', // explicit hard break
+        x: 18, y: 54, baseline: 25,
+        font: '28px sans-serif', lineHeight: 42,
+      },
+      {
+        text: 'beta', x: 18, y: 96, baseline: 25,
+        font: '28px sans-serif', lineHeight: 42,
+      },
+    ],
   };
 }
 ```
+
+`text` is the authoritative logical source. Each visual line also uses logical
+source order; `separatorAfter` is the exact source gap before the next row: a
+space for a consumed soft wrap, `"\n"` for a hard break, or `""` for a
+space-less CJK wrap. Omitting it retains the legacy newline fallback. Core keeps
+the separator inside the preceding positioned line and applies automatic base
+direction, so cross-row Range geometry has no projection-root fragment and
+Arabic with embedded LTR text copies correctly. Do not project Arabic
+presentation forms or other renderer-shaped visual glyph order.
 
 `Scene` transforms those local offsets with the entity matrix and aligns CSS
 line boxes using `cssLineBoxBaseline(font, lineHeight)`. Use explicit lines for
@@ -132,6 +152,12 @@ node with `scene.getContentElement(id)` / `scene.getA11yElement(id)`. Compare
 the Canvas baseline to the DOM line span's `getBoundingClientRect().top +
 cssLineBoxBaseline(computed.font, computed.lineHeight)` before changing fonts
 or adding ad-hoc CSS offsets.
+
+For multiline regressions, select the materialized root in Chromium and Firefox
+and verify `Selection.toString()` plus real Ctrl/Command+C. Range fragments must
+map to the projected row bands; Firefox may report both a line-box and glyph-box
+fragment for one row, so compare the per-row union and reject only root-origin
+or out-of-band fragments.
 
 ## Runtime gotchas (source-verified)
 
