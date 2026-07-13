@@ -3,7 +3,7 @@ name: vectojs-devtools
 description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.4.0+)
+# VectoJS Devtools (@vectojs/devtools, 0.4.1+)
 
 An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
 The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
@@ -38,7 +38,7 @@ devtools.detach(); // alias for panel.destroy(); always call on unmount
 - **Detail readout + nudging** — position/size/opacity/flags; arrow keys nudge
   `x/y` live (careful: while a devtools selection exists, arrows are consumed —
   in apps with their own keyboard nav, deselect or detach first).
-- **Event trace (0.3.0; content provenance in 0.4.0)** — opt-in bounded recent-event view. It shows pointer,
+- **Event trace (0.3.0; content provenance in 0.4.0; pointer cancellation in 0.4.1)** — opt-in bounded recent-event view. It shows pointer,
   wheel, and keyboard type/source/target summaries after application handlers
   run, including whether the browser default was prevented.
 
@@ -80,6 +80,12 @@ Entries retain only scalar state, not DOM events or entity references.
 `defaultPrevented` is read after browser dispatch completes, so it reports the
 final application decision. Keep the trace opt-in and destroy it outside the
 normal devtools panel life cycle.
+
+The pointer trace includes `pointercancel`. For a transactional drag or range
+selection, expect `pointerdown` followed by zero or more `pointermove` entries
+and exactly one terminal `pointerup` (commit) or `pointercancel` (rollback).
+Missing termination usually means the interactive entity was not projected or
+the application bypassed VMT pointer capture.
 
 `entry.source === "content"` means the native browser event started on a
 `[data-vecto-content]` mirror. Use it with `defaultPrevented`, `targetPath`, and
