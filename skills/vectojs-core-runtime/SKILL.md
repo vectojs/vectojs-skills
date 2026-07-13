@@ -57,6 +57,24 @@ Application shortcut routers must yield native copy when
 `window.getSelection()?.isCollapsed === false` and must not suppress
 Ctrl/Command+F unless they intentionally replace browser find.
 
+## Pointer transaction lifecycle (Core 1.6.1+)
+
+Projected interactive entities receive `pointerdown`, `pointermove`,
+`pointerup`, and `pointercancel` through the VMT event router. The semantic node
+captures the pointer after `pointerdown`, so movement continues outside the
+entity bounds. Treat `pointerup` as commit and `pointercancel` as rollback:
+
+```ts
+entity.on("pointerdown", beginPreview);
+entity.on("pointermove", updatePreview);
+entity.on("pointerup", commitPreview);
+entity.on("pointercancel", discardPreview);
+```
+
+Do not install parallel `document` or canvas listeners for product interaction.
+Keep the transient preview outside durable history, then append one command only
+when the pointer stream commits.
+
 ### Exact Canvas-to-DOM text geometry
 
 Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
