@@ -91,7 +91,7 @@ capture/bubble routing and DevTools tracing. Yield undo/redo, clipboard, and tex
 editing shortcuts when the native target is an input, textarea, or editable
 content. Do not add a parallel document keyboard listener.
 
-### Exact Canvas-to-DOM text geometry (Core 1.7+)
+### Positioned Canvas-to-DOM text geometry (Core 1.7+)
 
 Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
 a baseline, while CSS positions line boxes. For simple text, return a local
@@ -159,6 +159,26 @@ map to the projected row bands; Firefox may report both a line-box and glyph-box
 fragment for one row, so compare the per-row union and reject only root-origin
 or out-of-band fragments.
 
+### Prepared code-like text (Core 1.8+)
+
+For terminals, code blocks, and other fixed-grid text, compile the logical
+source once with `prepareContentGrid()` and return that exact object as
+`ContentProjection.grid`. Canvas paint and the semantic projection must consume
+the same cells. Paint `cell.glyph` at `cell.x`; retain `grid.source` and each
+cell's UTF-16 `sourceStart`/`sourceEnd` for copy, find, and syntax colors.
+
+The prepared grid owns grapheme carets, tabs, wide CJK/emoji advances, ZWJ
+clusters, CR/LF/CRLF separators, Arabic shaping, and UAX #9 bidi positions. Do
+not create a second DOM overlay, project shaped glyph order as source, or infer
+carets from viewport X. Core calibrates fonts in a cold batch and routes legal
+carets in transformed two-dimensional geometry for ordinary, line-less, and
+grid projections under DPR, browser zoom, rotation, reflection, and non-uniform
+scale.
+
+Use `@vectojs/core@1.8.0+`. Built-in `CodeBlock` requires
+`@vectojs/ui@1.9.0+` with Core `>=1.8.0 <2`. Read the selectable grid recipe in
+`references/scene-recipes.md` before building a custom implementation.
+
 ## Runtime gotchas (source-verified)
 
 - **Animating from `update()`**: prefer overriding `hasPendingAnimations()`
@@ -196,6 +216,7 @@ Run the package or app’s normal checks. For the VectoJS monorepo, useful gates
 ```bash
 bun run test
 bun run build
+bun run --cwd packages/core test:e2e
 oxlint packages/core/src packages/ui/src packages/three/src
 prettier --check "**/*.{js,ts,json,md,html,yaml}"
 ```

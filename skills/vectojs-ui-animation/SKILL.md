@@ -25,13 +25,15 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Use `Tooltip`, `Popover`, `ContextMenu`, and `Modal` for transient UI; keep dismissal behavior explicit.
 - Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
 - On `@vectojs/ui@1.7.0+`, Text, RichText, Markdown, CodeBlock, and Table cell text are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
-- On `@vectojs/ui@1.8.0+`, wrapped Text/RichText projections preserve logical
+- On `@vectojs/ui@1.9.0+` with `@vectojs/core@1.8.0+`, wrapped Text/RichText projections preserve logical
   source across soft spaces, hard breaks, space-less CJK wraps, and Arabic/RTL
   runs. Markdown lists and tables inherit the same behavior through their
   RichText cells, while each standalone Table cell remains one projection.
-  CodeBlock's default font stack starts with `ui-monospace`; keep custom code
-  fonts genuinely monospace where possible, but do not rely on font names alone
-  when testing fallback substitution.
+  `CodeBlock` shares Core's prepared source grid between per-grapheme Canvas
+  paint and semantic projection. This is the required path for tabs, ZWJ,
+  wide CJK/emoji, Arabic shaping, mixed bidi, Firefox font substitution, DPR,
+  zoom, rotation, mirror transforms, and non-uniform scale; a monospace font
+  name alone is not a geometry guarantee.
 - Call `Table.layout()` after changing an external Entity cell. Table rendering is draw-only; string cells are Text entities and each logical cell owns one content projection.
 - Prefer `Stack`/`Flow` composition over hand-positioning every child.
 - On `@vectojs/ui@1.7.1+`, use `@vectojs/ui/input` for Input-only code,
