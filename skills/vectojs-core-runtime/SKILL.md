@@ -10,7 +10,7 @@ Use this skill to build canvas-native VectoJS scenes that remain accessible, aut
 ## Core workflow
 
 1. Confirm installed package versions and inspect local source/docs when exact API behavior matters.
-2. Start from `@vectojs/core` primitives: one `Scene` per canvas and `Entity` subclasses for custom drawing.
+2. Start from `@vectojs/core` primitives: one `Scene` per canvas, `Entity` subclasses for custom drawing, and the built-in `Rect`/`Circle`/`Group` shape primitives (1.9.0+) for plain boxes, dots, and transform containers — no subclass needed.
 3. Use world/local coordinate conversion in hit tests. Do not subtract only `this.x` once nested transforms, scale, or rotation are possible.
 4. Expose semantics for interactive entities with `getA11yAttributes()`.
 5. Prefer `scene.renderMode = 'onDemand'` for static or event-driven UI; call `scene.markDirty()` after external mutations.
@@ -29,14 +29,15 @@ For copyable examples, read `references/scene-recipes.md`.
 
 ## Common mistakes
 
-| Mistake                                                 | Correction                                                                                            |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                           |
-| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                          |
-| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                   |
-| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.              |
-| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                         |
-| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them. |
+| Mistake                                                 | Correction                                                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                                                           |
+| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                                                          |
+| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                                                   |
+| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.                                              |
+| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                                                         |
+| Subclassing `Entity` for a plain box/dot/group          | Use the built-in `Rect`/`Circle`/`Group` primitives (1.9.0+); reach for a subclass only when you need custom `render`/hit-test logic. |
+| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them.                                 |
 
 ## Static text selection (Core 1.5+)
 

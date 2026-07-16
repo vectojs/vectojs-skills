@@ -1,5 +1,36 @@
 # VectoJS core scene recipes
 
+## Shape primitives (Rect / Circle / Group, 1.9.0+)
+
+For a plain box, dot, or transform container, skip the `Entity` subclass and use
+the built-in primitives. `Entity.set()` assigns several props at once (through
+their setters), and `add()` is variadic.
+
+```ts
+import { Rect, Circle, Group, Scene } from "@vectojs/core";
+
+const card = new Rect({
+  width: 240,
+  height: 120,
+  fill: "#1a1e26",
+  stroke: "#26324a",
+  radius: 12,
+});
+const dot = new Circle({ radius: 6, fill: "#e0a458" }).set({ x: 16, y: 16 });
+
+// Group is transform-only: it draws nothing, never becomes the pick target,
+// and composes one transform onto its children (which stay interactive).
+const badge = new Group(card, dot);
+badge.set({ x: 40, y: 40 });
+
+scene.add(badge); // one child …
+// … or several at once: scene.add(card, dot, badge);
+```
+
+A solid-fill, unstroked, square-cornered `Rect`/`Circle` opts into the
+GPU/point batch fast path automatically; adding a `stroke` or corner `radius`
+falls back to the exact Canvas path.
+
 ## Minimal accessible entity
 
 ```ts
