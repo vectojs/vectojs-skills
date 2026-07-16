@@ -23,6 +23,11 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Use `Input` and `TextArea` for text entry so IME, selection, clipboard, and undo stay native.
 - Use `Button`, `Toggle`, `Checkbox`, `Slider`, `Dropdown`, `RadioGroup`, and `Tabs` for controls with roles.
 - Use `Tooltip`, `Popover`, `ContextMenu`, and `Modal` for transient UI; keep dismissal behavior explicit.
+- On `@vectojs/ui@1.9.2+`, focused editor surfaces import `ContextMenu` from
+  `@vectojs/ui/context-menu` so they do not pull Markdown and MathJax into the
+  application entry. Open it from VectoJS `pointerdown` when the native pointer
+  button is `2`, using `sceneX`/`sceneY`; Core does not emit a `contextmenu`
+  event and does not expose legacy `globalX`/`globalY` coordinates.
 - Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
 - On `@vectojs/ui@1.7.0+`, Text, RichText, Markdown, CodeBlock, and Table cell text are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
 - On `@vectojs/ui@1.9.0+` with `@vectojs/core@1.8.0+`, wrapped Text/RichText projections preserve logical
@@ -38,8 +43,9 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Prefer `Stack`/`Flow` composition over hand-positioning every child.
 - On `@vectojs/ui@1.7.1+`, use `@vectojs/ui/input` for Input-only code,
   `@vectojs/ui/text` for selectable Text-only code, and `@vectojs/ui/measure`
-  for measurement-only code; retain the root import for multi-component
-  surfaces.
+  for measurement-only code. On UI 1.9.2+, use `@vectojs/ui/context-menu`
+  for ContextMenu-only editor surfaces; retain the root import for
+  multi-component surfaces.
 
 ## Motion rules
 
@@ -57,6 +63,8 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Drawing a beautiful control without `getA11yAttributes()` or a native UI component.
 - Animating layout so aggressively that hit boxes and projected DOM feel detached.
 - Rebuilding a whole component tree for every state change.
+- Importing `ContextMenu` from the UI root in an otherwise focused editor entry,
+  which can retain rich-content dependencies and defeat the application's bundle budget.
 - Hiding focus indicators on canvas controls.
 - Ignoring IME and clipboard behavior by faking text entry.
 - Intercepting Ctrl/Command+C while `window.getSelection()?.isCollapsed === false`, which overwrites native static-text copy; likewise, do not prevent Ctrl/Command+F without a replacement find UI.

@@ -9,10 +9,41 @@ graph:
 import { Input, type InputOptions } from "@vectojs/ui/input";
 import { Text } from "@vectojs/ui/text";
 import { measureText, wrapLines } from "@vectojs/ui/measure";
+import { ContextMenu } from "@vectojs/ui/context-menu"; // UI 1.9.2+
 ```
 
 Keep the root `@vectojs/ui` import when a surface composes several components,
 as the form example below does.
+
+## Canvas-native context menu
+
+Core routes secondary input as an ordinary VectoJS pointer event. Keep the
+command surface in the Scene overlay root and suppress the browser-owned menu
+at the application boundary when needed:
+
+```ts
+import { ContextMenu } from "@vectojs/ui/context-menu";
+
+const menu = new ContextMenu({
+  items: [{ label: "Delete", shortcut: "Delete", onClick: deleteSelection }],
+});
+scene.overlayRoot.add(menu);
+
+target.on("pointerdown", (event) => {
+  const pointer = event.nativeEvent as PointerEvent | undefined;
+  if (
+    pointer?.button !== 2 ||
+    event.sceneX === undefined ||
+    event.sceneY === undefined
+  )
+    return;
+  menu.showAtPoint(event.sceneX, event.sceneY);
+});
+```
+
+Do not register a VectoJS `contextmenu` listener or read `globalX/globalY`; those
+are not Core APIs. Use one capture listener at the host boundary only to prevent
+the browser's native menu, not to implement the editor command behavior.
 
 ## Accessible form card
 
