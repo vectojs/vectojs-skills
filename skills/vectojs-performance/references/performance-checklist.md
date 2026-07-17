@@ -15,7 +15,7 @@ Record:
 ## Fast probes
 
 ```ts
-scene.renderMode = 'onDemand';
+scene.renderMode = "onDemand";
 scene.a11ySyncInterval = 100;
 scene.markDirty();
 ```
@@ -44,6 +44,14 @@ If this lowers idle CPU but not interaction latency, the issue is not the idle r
 - WebGL point batching helps when the bottleneck is many similar point/rect draws.
 - WebGPU compute helps when simulation is parallel and large enough to pay setup costs.
 - Neither helps much if app-side data preparation, text layout, or semantic sync dominates.
+- Backing-store cost scales with `logical size × dpr²`, not linearly — a
+  full-screen `pointBackend: 'webgl'` scene that's smooth at DPR 1 (most dev
+  laptops) can jank badly on a DPR-3 display (measured: 116ms max-frame at
+  DPR 3 vs. flawless 60fps at DPR 1 for a 1200-particle full-screen field).
+  Pass `new Scene(canvas, { maxDPR: 2 })` (>= `@vectojs/core@1.10.0`) instead
+  of monkey-patching `window.devicePixelRatio` — it's re-applied correctly
+  on every `resize()`, which a one-time patch is not. `maxDPR: 2` is
+  retina-crisp; only go lower if 2 still isn't enough headroom.
 
 ## Leak checks
 
