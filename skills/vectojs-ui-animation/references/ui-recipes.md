@@ -27,7 +27,6 @@ import { ContextMenu } from "@vectojs/ui/context-menu";
 const menu = new ContextMenu({
   items: [{ label: "Delete", shortcut: "Delete", onClick: deleteSelection }],
 });
-scene.overlayRoot.add(menu);
 
 target.on("pointerdown", (event) => {
   const pointer = event.nativeEvent as PointerEvent | undefined;
@@ -37,7 +36,13 @@ target.on("pointerdown", (event) => {
     event.sceneY === undefined
   )
     return;
-  menu.showAtPoint(event.sceneX, event.sceneY);
+  // Passing `target` as the third arg lets `showAtPoint` resolve the scene
+  // even on the very first call, when the menu has never been mounted —
+  // required since a bare `new ContextMenu({...})` has no `parent`, so its
+  // `Entity.scene` walks to `null` and a source-less `showAtPoint` would
+  // silently no-op. (`scene.overlayRoot.add(menu)` once up-front also works;
+  // the `source` arg is the pre-mount-free canonical pattern.)
+  menu.showAtPoint(event.sceneX, event.sceneY, target);
 });
 ```
 
