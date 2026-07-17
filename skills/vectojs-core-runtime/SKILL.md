@@ -29,15 +29,54 @@ For copyable examples, read `references/scene-recipes.md`.
 
 ## Common mistakes
 
-| Mistake                                                 | Correction                                                                                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                                                           |
-| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                                                          |
-| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                                                   |
-| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.                                              |
-| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                                                         |
-| Subclassing `Entity` for a plain box/dot/group          | Use the built-in `Rect`/`Circle`/`Group` primitives (1.9.0+); reach for a subclass only when you need custom `render`/hit-test logic. |
-| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them.                                 |
+| Mistake                                                 | Correction                                                                                                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                                                                                                           |
+| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                                                                                                          |
+| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                                                                                                   |
+| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.                                                                                              |
+| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                                                                                                         |
+| Subclassing `Entity` for a plain box/dot/group          | Use the built-in `Rect`/`Circle`/`Group` primitives (1.9.0+); reach for a subclass only when you need custom `render`/hit-test logic.                                                 |
+| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them.                                                                                 |
+| Ignoring DPR² render cost on HiDPI screens              | Pass `maxDPR: 2` in `SceneOptions` to cap the backing-store pixel count. `maxDPR` is reapplied on every `resize()`. (Core 1.10.0+)                                                    |
+| Custom motion in `update()` drops to ~2fps              | Drive motion through `setTransition`/`animateTo`/`springTo`, or override `hasPendingAnimations()` to return `true` while moving. Core 1.11.0+ warns in dev mode when this is missing. |
+
+## Programmatic focus: `Entity.focus()` (Core 1.11.0+)
+
+```ts
+entity.focus();
+```
+
+Focuses the entity's projected a11y shadow element. If the element hasn't been
+created yet (e.g., called synchronously after `scene.add()`), retries once on
+the next rAF. Returns immediately; no promise. Prefer this over manual
+`requestAnimationFrame` + `getElementById` patterns.
+
+## Double-click: `'dblclick'` event (Core 1.11.0+)
+
+```ts
+entity.on("dblclick", (e) => handleDoubleClick(e));
+```
+
+Wired through the same dispatch as `click`. The existing a11yRoot-level
+`dblclick` handler for text word-selection fires on the content-projection DOM
+layer and is unaffected.
+
+## Dev-mode runtime warnings (Core 1.11.0+)
+
+Enable extra runtime guardrails:
+
+```ts
+Scene.devMode = true; // or set NODE_ENV=development or globalThis.__DEV__
+```
+
+Periodic checks (~every 2s at 60fps):
+
+- **detachA11y leak**: warns when shadow-element count exceeds interactive entities
+- **Content projection mismatch**: warns when projected text differs from DOM text
+- **Missing `hasPendingAnimations`**: warns when `update()` is overridden but `hasPendingAnimations()` is not
+
+These checks only run in dev mode and have negligible overhead.
 
 ## Static text selection (Core 1.5+)
 
