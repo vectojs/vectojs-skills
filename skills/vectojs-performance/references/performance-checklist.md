@@ -25,9 +25,12 @@ If this lowers idle CPU but not interaction latency, the issue is not the idle r
 ## Layout/text
 
 - Use `Text.setMaxWidth()` for reflow rather than replacing entities.
-- Use rich/markdown append APIs for streams.
+- Use rich/markdown append APIs for streams, batched per animation frame
+  (`streaming-recipes.md` has the verified pattern).
 - Cache expensive measurements and segmentation.
-- Avoid full markdown reparse on each token for long documents.
+- `appendMarkdown` re-lexes the whole accumulated source per call (off-thread
+  when `Worker` exists) — segment long transcripts into one `Markdown` entity
+  per message so the live document stays small.
 
 ## Large data
 

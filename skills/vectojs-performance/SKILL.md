@@ -17,6 +17,9 @@ Use this skill when VectoJS feels slow or when designing workloads that may exce
 6. Verify with the same benchmark after each change.
 
 Read `references/performance-checklist.md` for concrete probes and fixes.
+For token streams / chat / log tails, read `references/streaming-recipes.md` —
+the per-frame batching pattern there is the single highest-leverage streaming
+fix and is NOT optional for LLM-speed streams.
 
 ## Decision matrix
 
@@ -24,6 +27,7 @@ Read `references/performance-checklist.md` for concrete probes and fixes.
 | ----------------------------- | -------------- | ------------------------------------------------------------------------ |
 | Idle page uses CPU            | render loop    | `scene.renderMode = 'onDemand'`, auto-throttle, avoid timers             |
 | Resize or stream stalls       | layout/text    | hot width/content APIs, incremental append, debounce app compute         |
+| Streaming jank (chat/logs)    | append cadence | batch tokens per rAF, one `Markdown` per message, `VirtualList` history — see `references/streaming-recipes.md` |
 | Many rows/items slow          | entity count   | `VirtualList`, culling, aggregate decorative shapes                      |
 | Pointer feels delayed         | hit-test/event | spatial hash boundaries, fewer overlapping interactive nodes             |
 | 100k points slow              | renderer       | WebGL point backend if draw cost dominates                               |

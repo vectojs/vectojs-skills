@@ -94,6 +94,25 @@ was intercepted. Tests should dispatch from a descendant of the materialized
 content node (`scene.getContentElement(id)`) and await one microtask before
 asserting the finalized trace entry.
 
+## Triage map: symptom → tool
+
+Reach for numbers before screenshots:
+
+| Symptom                                       | Workflow                                                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Which entity owns this pixel?                 | `pickInScene(scene, x, y)` → `inspectEntity(hit)`                                                                           |
+| Entity positioned/sized wrong                 | `inspectEntity` world bounds, then walk ancestors — first one with wrong bounds owns the bug (`entityPath` names the chain) |
+| Something overflows/overlaps somewhere        | `auditScene(scene)` — findings carry entityPath + per-edge overflow amounts                                                  |
+| Interaction moved something it shouldn't      | `captureSnapshot` → interact → `diffSnapshots`                                                                              |
+| Click/wheel/key goes to the wrong place       | `createEventTrace` — source/targetPath/coords + final `defaultPrevented`                                                     |
+| Drag-selection or copy intercepted            | Trace entries with `source === "content"`; check `defaultPrevented` + targetPath                                            |
+| Drag stuck / never commits                    | Pointer trace transaction: `pointerdown` → moves → exactly one `pointerup`/`pointercancel`; missing terminal = projection/capture bug |
+| Selection drifts from pixels after zoom       | Not a devtools bug — the app owns sizing and never called `scene.resize()` (Firefox Range recalibration)                     |
+
+`entityPath(entity)` returns the ancestry chain as `"Scene > Card#<id8> > Text#<id8>"`
+(ids truncated to 8 chars) — note snapshot-diff paths use `type[index]` chains
+instead, since ids are random per run.
+
 ## Scene auditing (0.2.0)
 
 ```ts

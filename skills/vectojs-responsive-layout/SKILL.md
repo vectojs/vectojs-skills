@@ -17,6 +17,9 @@ Use this skill when a VectoJS UI must adapt to viewport size, browser zoom, dens
 6. Use role labels and semantic regions even for canvas-rendered layout containers.
 
 Read `references/layout-recipes.md` for copyable patterns.
+For OS/browser/zoom/DPR consistency and text-selection alignment (embedded
+`scene.resize()` bridge, Firefox Range recalibration, web-font race, the
+DPR-1-vs-2 test matrix), read `references/cross-environment.md`.
 
 ## Design rules
 
@@ -42,6 +45,9 @@ Read `references/layout-recipes.md` for copyable patterns.
 | Expecting `Tabs` to stay legible with many tabs                   | `Tabs` (>= `@vectojs/ui@1.1.3`) keeps a fixed `tabWidth` (floor `minTabWidth`) and scrolls horizontally; pass `closable: true` + `onClose` for per-tab × close. Since 1.9.4 surplus bar width stays empty (never stretches past `tabWidth`). |
 | Wanting no tab bar while only one tab exists (Vim `showtabline=1`) | `Tabs` (>= `@vectojs/ui@1.9.5`) `autoHideTabBar: true` — bar + hit region vanish below two tabs, content takes full height; read the live `effectiveTabBarHeight` getter (not `tabHeight`) when laying out siblings around the bar. |
 | Drag handler reading `localX` deltas from the dragged handle      | `PanelResizeHandle` (>= `1.1.3`) uses `sceneX`/`sceneY` — a coordinate space that does not move with the handle. Any custom drag must do the same or it lags the cursor.                                   |
+| Selection highlights drift after zoom (Firefox), canvas looks fine | The app owns sizing but never calls `scene.resize()` — it is the Range-metric recalibration hook. Bridge the container via ResizeObserver (`references/cross-environment.md`).                             |
+| Hit/selection tests pass headless, fail on real laptops           | Headless runs DPR 1; real machines are DPR 2 — run pointer/selection tests at `deviceScaleFactor: 2` too. Offset proportional to distance from origin ⇒ DPR bug.                                            |
+| Text renders in a different font than it was measured with        | Web-font race: construct text after `await document.fonts.ready`, re-measure from `document.fonts.onloadingdone` for lazy fonts.                                                                            |
 
 ## Verification
 
