@@ -40,8 +40,7 @@ target.on("pointerdown", (event) => {
   // even on the very first call, when the menu has never been mounted —
   // required since a bare `new ContextMenu({...})` has no `parent`, so its
   // `Entity.scene` walks to `null` and a source-less `showAtPoint` would
-  // silently no-op. (`scene.overlayRoot.add(menu)` once up-front also works;
-  // the `source` arg is the pre-mount-free canonical pattern.)
+  // silently no-op.
   menu.showAtPoint(event.sceneX, event.sceneY, target);
 });
 ```
