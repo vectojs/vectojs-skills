@@ -18,6 +18,10 @@ Use this skill to build canvas-native VectoJS scenes that remain accessible, aut
 
 For copyable examples, read `references/scene-recipes.md`.
 
+## Package layout
+
+`@vectojs/core` owns the `Scene`/`Entity` runtime, renderers (Canvas/SVG/WebGL/WebGPU), a11y projection, and the `Entity`-based text renderers (`MSDFTextEntity`, `SVGEntity`, `TextEntity`/`GridTextEntity`). The lower-level engines are now standalone packages: `@vectojs/text` (BiDi, Arabic shaping, typography, MSDF fonts, prepared content grids), `@vectojs/layout` (`LayoutEngine`, `LayoutWorkerManager`, measurement), `@vectojs/math` (`SpatialHashGrid`, `SpringPhysics`), and `@vectojs/animation` (`Easing`, `TweenDriver`, `SpringDriver`). `@vectojs/core` depends on and re-exports all four, so `import { LayoutEngine, SpringPhysics, … } from '@vectojs/core'` and the `@vectojs/core/{text,layout,renderer}` subpaths keep working unchanged — prefer importing from the standalone packages only when you want a smaller dependency surface.
+
 ## Architecture rules
 
 - Treat VectoJS as a retained scene runtime, not a DOM component library.
