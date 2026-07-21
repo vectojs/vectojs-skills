@@ -31,6 +31,15 @@ If this lowers idle CPU but not interaction latency, the issue is not the idle r
 - `appendMarkdown` re-lexes the whole accumulated source per call (off-thread
   when `Worker` exists) — segment long transcripts into one `Markdown` entity
   per message so the live document stays small.
+- When the same short strings are drawn thousands of times per frame
+  (danmaku/barrage, chat/log tails, particle labels), `ctx.fillText` shaping +
+  color-parse dominates and starves the GPU. Use `TextRasterCache`
+  (core ≥ 1.12.0): rasterize each distinct `(font, color, text)` run once, then
+  blit it with `drawImage` at the fillText baseline (`x - offsetX`,
+  `baselineY - offsetY`). Bounded repeated content → ~100% hit rate; unbounded
+  content is capped by `maxEntries`. Only helps _reused_ runs — draw-once text
+  is pure overhead. Diagnostic: if swapping `fillText`↔`drawImage` doesn't move
+  FPS, the wall is draw-count/overdraw (batch to WebGL/MSDF), not shaping.
 
 ## Large data
 
