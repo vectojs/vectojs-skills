@@ -15,9 +15,12 @@ right edge of the page. Peer deps: `@vectojs/core >=1.0.0`, `@vectojs/ui >=1.0.0
 import { attachDevtools } from "@vectojs/devtools";
 
 const devtools = attachDevtools(scene, {
-  width: 320, // panel width px (default 320)
+  width: 340, // panel width px (default 340)
   refreshInterval: 500, // auto-refresh ms while open; 0 disables (default 500)
   traceEvents: true, // opt-in pointer/wheel/keyboard routing trace
+  dockSide: "right", // 'right' | 'left' (0.5.0; default 'right')
+  showPerf: true, // live perf HUD strip reading Scene.frameStats (0.5.0)
+  defaultTab: "tree", // 'tree' | 'inspect' | 'audit' | 'events' | 'settings' (0.5.0)
 });
 // …
 devtools.detach(); // alias for panel.destroy(); always call on unmount
@@ -27,18 +30,35 @@ devtools.detach(); // alias for panel.destroy(); always call on unmount
 
 ## What the panel gives you
 
-- **Entity tree** — live VMT view built from `scene.rootEntity` / `scene.overlayRootEntity`.
-  Labels show `type (x,y) w×h` plus ⚡ (interactive) and ▶ (animating) markers.
+Since **0.5.0** the panel is a modern glass dock (rounded corners, shadow,
+`Card`-grouped sections) organized into **tabs** (`Tree · Info · Audit · Log ·
+⚙`), with a header of three ghost text-glyph icon buttons (`⌖` pick / `⟳`
+refresh / `⚠` audit) and count badges (total / interactive⚡ / findings⚠).
+
+- **Entity tree (`Tree` tab)** — live VMT view built from `scene.rootEntity` /
+  `scene.overlayRootEntity`. Labels show `type (x,y) w×h` plus ⚡ (interactive)
+  and ▶ (animating) markers. A **filter Input** (0.5.0) narrows by type/id
+  substring; it's view-only — the id→entity index still resolves everything.
+  Programmatic: `panel.setFilter(text)`.
 - **Pick mode** — click any pixel on the host canvas; deepest entity wins.
-- **Audit button (0.2.0)** — runs `auditScene` and lists findings in place of the
-  tree; selecting a finding selects + highlights the offending entity. `Refresh`
-  restores the normal tree. Programmatic: `panel.audit()` returns the findings,
-  `panel.selectFinding(i)` selects one.
-- **Selection highlight** — drawn through the host scene's overlay.
-- **Detail readout + nudging** — position/size/opacity/flags; arrow keys nudge
-  `x/y` live (careful: while a devtools selection exists, arrows are consumed —
-  in apps with their own keyboard nav, deselect or detach first).
-- **Event trace (0.3.0; content provenance in 0.4.0; pointer cancellation in 0.4.1)** — opt-in bounded recent-event view. It shows pointer,
+- **Audit (`Audit` tab, 0.2.0)** — runs `auditScene` and lists findings; selecting
+  one selects + highlights the offending entity. Since 0.5.0 findings live in
+  their own tab (they no longer replace the tree). Programmatic: `panel.audit()`
+  returns the findings, `panel.selectFinding(i)` selects one.
+- **Selection highlight** — drawn through the host scene's overlay. Toggle it via
+  the Settings tab or `panel.setHighlightEnabled(bool)` (0.5.0).
+- **Detail readout + inline edit (`Info` tab)** — position/size/opacity/flags;
+  arrow keys nudge `x/y` live, and 0.5.0 adds inline `x`/`y`/`opacity` `Input`
+  editors plus **Copy path** / **Copy state JSON** buttons. (Careful: while a
+  devtools selection exists, arrows are consumed — in apps with their own
+  keyboard nav, deselect or detach first.)
+- **Perf HUD (0.5.0)** — a bottom strip reading `scene.frameStats` (fps,
+  ms/frame, entity count, render mode, rendered/skipped frames). The fps is the
+  real _rendered-frame_ cadence, so an idle `onDemand`/auto-throttled scene
+  honestly reads ~2fps, not a fake 60. Disable with `showPerf: false`.
+- **Settings tab (0.5.0)** — highlight toggle, refresh-interval and dock-side
+  (left/right) switches (`panel.setRefreshInterval(ms)`, `panel.setDockSide(side)`).
+- **Event trace (`Log` tab; 0.3.0; content provenance in 0.4.0; pointer cancellation in 0.4.1)** — opt-in bounded recent-event view. It shows pointer,
   wheel, and keyboard type/source/target summaries after application handlers
   run, including whether the browser default was prevented.
 
