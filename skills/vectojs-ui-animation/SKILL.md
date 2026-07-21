@@ -24,12 +24,16 @@ Read `references/ui-recipes.md` for patterns and snippets.
 - Use `Button`, `Toggle`, `Checkbox`, `Slider`, `Dropdown`, `RadioGroup`, and `Tabs` for controls with roles.
 - Use `Tooltip`, `Popover`, `ContextMenu`, and `Modal` for transient UI; keep dismissal behavior explicit.
 - On `@vectojs/ui@1.9.2+`, focused editor surfaces import `ContextMenu` from
-  `@vectojs/ui/context-menu` so they do not pull Markdown and MathJax into the
-  application entry. Open it from VectoJS `pointerdown` when the native pointer
-  button is `2`, using `sceneX`/`sceneY`; Core does not emit a `contextmenu`
-  event and does not expose legacy `globalX`/`globalY` coordinates.
+  `@vectojs/ui/context-menu` to keep the application entry lean. Open it from
+  VectoJS `pointerdown` when the native pointer button is `2`, using
+  `sceneX`/`sceneY`; Core does not emit a `contextmenu` event and does not expose
+  legacy `globalX`/`globalY` coordinates.
+- As of `@vectojs/ui@2.0.0`, `Markdown` and `CodeBlock` are the standalone
+  `@vectojs/markdown` package (import `from '@vectojs/markdown'`, not
+  `@vectojs/ui`). `marked` + MathJax load only when you use it, so plain `ui`
+  apps no longer pay for them.
 - Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
-- On `@vectojs/ui@1.7.0+`, Text, RichText, Markdown, CodeBlock, and Table cell text are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
+- Text, RichText, and Table cell text (from `@vectojs/ui`) and `Markdown`/`CodeBlock` (from `@vectojs/markdown`) are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
 - On `@vectojs/ui@1.9.0+` with `@vectojs/core@1.8.0+`, wrapped Text/RichText projections preserve logical
   source across soft spaces, hard breaks, space-less CJK wraps, and Arabic/RTL
   runs. Markdown lists and tables inherit the same behavior through their
