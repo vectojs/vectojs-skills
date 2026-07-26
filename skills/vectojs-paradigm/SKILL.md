@@ -41,7 +41,10 @@ you can print and assert. Work in this order:
 
 1. **Read the tree.** `scene.getA11yTree()` returns the semantic snapshot
    (roles, labels, values, hierarchy). Wrong structure here = wrong structure
-   on screen, found without rendering anything.
+   on screen, found without rendering anything. It reports what is *projected*:
+   an entity is absent unless `interactive` and it has a box (or
+   `a11yFullViewport`), so an empty or short tree is often a missing opt-in
+   rather than a structural bug.
 2. **Read the numbers.** `entity.getWorldTransform()`, `.width`, `.opacity`,
    `hasPendingAnimations()`. Layout bugs are arithmetic bugs — compare the
    number you got with the number you expected. `@vectojs/devtools` (0.1.0+)
