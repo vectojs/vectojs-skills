@@ -50,7 +50,16 @@ Read `references/three-recipes.md` for snippets.
 - **`stroke()` line width is effectively 1px** on most platforms
   (`LineBasicMaterial.linewidth` is a known WebGL limitation). Draw thick
   lines as filled shapes instead.
-- `ThreeRenderer.drawImage` allocates a texture per call per frame (disposed
-  on `clear()`); reuse a source canvas where possible. `fillText` is cached
-  from three 0.1.4 (LRU keyed by font|color|text, 256 entries) — on ≤ 0.1.3 it
-  had the same per-call cost, so prefer `MSDFTextEntity` there.
+- **Texture caches (three 0.1.7+)**: both `fillText` and `drawImage` textures
+  are cached with a 256-entry LRU (text keyed by font|color|text). Before 0.1.7
+  `drawImage` allocated a texture per call per frame, so reusing a source canvas
+  mattered more; it is still good practice for very large images.
+- **GPU context loss + runtime DPR (three 0.1.7+)**: `ThreeRenderer` recovers on
+  its own. `webglcontextlost` is `preventDefault()`-ed (required, or the browser
+  never fires the restore event) and flips `isContextLost()`, which makes
+  `present()` a no-op while lost; `webglcontextrestored` re-applies pixel ratio
+  and size (a restore can land on a different display) and forces a repaint. A
+  `(resolution: Ndppx)` media query re-applies `setPixelRatio` when DPR changes
+  at runtime (monitor move, browser zoom) and re-arms itself. All of it is
+  guarded for SSR/OffscreenCanvas and torn down in `dispose()`. Do not add your
+  own context-loss listener — you would fight the built-in recovery.

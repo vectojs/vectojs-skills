@@ -135,6 +135,76 @@ capture/bubble routing and DevTools tracing. Yield undo/redo, clipboard, and tex
 editing shortcuts when the native target is an input, textarea, or editable
 content. Do not add a parallel document keyboard listener.
 
+### The full `A11yAttributes` surface
+
+`getA11yAttributes()` returns far more than `role`/`label`/`tabIndex`. Every
+field below is projected to a real attribute each frame with dirty checking, and
+returning `undefined` **removes** it — so state that stops applying disappears
+instead of going stale. Note `false` is distinct from `undefined`
+(`aria-invalid="false"` means "explicitly valid").
+
+Beyond the element/native fields (`tag`, `href`, `target`, `src`, `alt`,
+`inputType`, `placeholder`, `value`, `textInputStyle`):
+
+| Group | Fields |
+| --- | --- |
+| Naming | `label`, `labelledby`, `describedby` |
+| State | `checked`, `disabled`, `selected`, `expanded`, `required`, `invalid`, `valuemin`, `valuemax`, `level` |
+| Relationships | `controls`, `haspopup`, `activedescendant`, `ariaModal` |
+| Live regions | `live` (`'off'\|'polite'\|'assertive'`), `atomic`, `relevant` |
+| Pointer | `pointerEvents` (`'auto'\|'none'`) |
+
+`required`/`invalid` are the only way a canvas-drawn form is announceable —
+without them a validation state is invisible to AT. `live`/`atomic`/`relevant`
+are what make streaming text (chat, logs, async validation) announce without
+moving focus.
+
+### Composite widgets: pooled hotspots + roving tabindex
+
+A tree, grid, menu, radio group, or tab list must expose **one role per child**,
+not just a container role. The pattern the built-ins use (reuse it, don't invent
+one):
+
+1. a transparent, focusable child `UIComponent` per **visible** child —
+   `interactive = true`, `getA11yAttributes()` returning the child's role +
+   state + roving `tabIndex`, `render()` a no-op;
+2. the **parent** owns the keyboard handler and moves the single `tabIndex: 0`;
+3. if the parent or an underlying content projection owns the pointer
+   (selectable text, drag-to-scroll, canvas hit handling), give the hotspot
+   `pointerEvents: 'none'` — a real click/drag then passes through, while
+   keyboard focus and AT-synthesized `click` still work.
+
+Pool only visible children, so a virtualized list projects O(viewport) hotspots
+rather than one per row. Scroll the target into view *before* moving focus to it.
+
+### Tab order follows visual reading order
+
+The a11y shadow tree is ordered by **where things are drawn**, not the order you
+added them — rows top-to-bottom, then inline within each row. Two entities added
+in any order but drawn side by side Tab left→right. For an RTL UI set
+`readingDirection: 'rtl'` (a `SceneOptions` field, also a live setter) so the
+inline order within each row reverses too.
+
+### Forced colors (High Contrast)
+
+A `<canvas>` is opaque pixels, so the browser's `forced-colors` remapping never
+touches what you draw — a themed control stays unreadable unless it repaints
+itself. Read `scene.forcedColors` (a getter backed by `(forced-colors: active)`;
+the scene repaints automatically when it toggles) and draw with CSS system
+colors:
+
+```ts
+render(r: IRenderer) {
+  const forced = this.scene?.forcedColors ?? false;
+  r.fill(forced ? 'ButtonFace' : this.bg);
+  if (forced) r.stroke('ButtonText', 1);        // give the shape an edge
+  r.fillText(this.label, x, y, this.font, forced ? 'ButtonText' : this.color);
+}
+```
+
+Use `Highlight` for selection/focus, `Canvas`/`CanvasText` for surfaces and body
+text. `Button` already does this.
+
 ### Positioned Canvas-to-DOM text geometry (Core 1.7+)
 
 Do not assume an entity origin is a CSS text origin: Canvas `fillText()` takes
@@ -219,39 +289,43 @@ carets in transformed two-dimensional geometry for ordinary, line-less, and
 grid projections under DPR, browser zoom, rotation, reflection, and non-uniform
 scale.
 
-Use `@vectojs/core@1.8.0+`. Built-in `CodeBlock` requires
-`@vectojs/ui@1.9.0+` with Core `>=1.8.0 <2`. Read the selectable grid recipe in
-`references/scene-recipes.md` before building a custom implementation.
+`Markdown` and `CodeBlock` live in **`@vectojs/markdown`** (they moved out of
+`@vectojs/ui` in ui 2.0.0), which peers on `core >=1.8.0 <2` and `ui >=2.0.0 <3`.
+Read the selectable grid recipe in `references/scene-recipes.md` before building
+a custom implementation.
 
 ## Runtime gotchas (source-verified)
 
-- **Animating from `update()`**: prefer overriding `hasPendingAnimations()`
-  to report "still moving", or drive motion through
-  `setTransition`/`animateTo`/`springTo`. On core **0.2.6+**, `markDirty()`
-  called _inside_ `update()` also works (the dirty flag is consumed before
-  the update/render pass, so the mark survives to the next frame). On core
-  **≤ 0.2.5** it was wiped by the loop's end-of-tick `dirty = false`, so an
-  update()-integrating entity stepped at ~2 FPS once the throttle engaged —
-  or stalled in onDemand mode. That exact bug shipped three separate times
-  (ScrollView, VirtualList, TreeView).
-- **onDemand + `autoThrottle: false`**: on core ≤ 0.2.5 this combination
-  silently disables the onDemand frame skip (renders every rAF). Fixed in
-  core 0.2.6; on older versions leave `autoThrottle` at its default.
-- **Embedded (non-fullscreen) canvases**: pass `disableWindowResize: true`.
-  On core ≤ 0.2.5 also call `scene.resize(w, h)` immediately after
-  construction — the default renderer sized the canvas to the window anyway
-  (fixed in core 0.2.6).
-- **Custom `IRenderer` implementers**: `flush()` runs around _every_
-  non-batched node each frame — it must only commit the pending primitive
-  batch (near-zero cost when empty). Do end-of-frame work (a real GL render)
-  in the optional `present()` hook, called exactly once per render pass.
-- **Springs vs background tabs**: on core ≤ 0.2.5, `springTo` /
-  `setTransition('spring')` integrated the raw rAF `dt`, so returning from a
-  background tab (multi-second dt) made in-flight springs diverge violently.
-  Core 0.2.6 substeps the integration.
-- **`destroy()` and animation promises**: on core ≤ 0.2.5, promises from
-  `animateTo`/`springTo` never settled if the entity was destroyed mid-flight
-  (awaiting exit sequences hung). Core 0.2.6 resolves them on `destroy()`.
+- **Animating from `update()`**: prefer overriding `hasPendingAnimations()` to
+  report "still moving", or drive motion through
+  `setTransition`/`animateTo`/`springTo`. `markDirty()` called *inside*
+  `update()` also works — the dirty flag is consumed before the update/render
+  pass, so the mark survives to the next frame.
+- **`dt` is clamped to 100ms** (`MAX_FRAME_DT`). After a backgrounded tab, a
+  breakpoint, or a long GC the real elapsed time can be seconds; feeding that
+  raw into integration makes physics and tweens teleport. If you integrate `dt`
+  yourself in `update(dt)`, it never exceeds 100ms — do not add your own
+  substepping on top.
+- **Off-screen scenes stop rendering.** An `IntersectionObserver` on the canvas
+  pauses the rAF loop when the canvas scrolls fully out of view and resumes on
+  re-entry. Nothing to opt into; where `IntersectionObserver` is unavailable
+  (SSR/jsdom) the scene is treated as always on-screen. Don't hand-roll a
+  visibility pause on top of it.
+- **Embedded (non-fullscreen) canvases**: pass `disableWindowResize: true` and
+  drive size with `scene.resize(w, h)`.
+- **Custom `IRenderer` implementers**: `flush()` runs around *every*
+  non-batched node each frame — it must only commit the pending primitive batch
+  (near-zero cost when empty). Do end-of-frame work (a real GL render) in the
+  optional `present()` hook, called exactly once per render pass. If you own a
+  GPU context, also implement the two optional context-loss hooks — see below.
+- **GPU context loss**: a GPU reset or memory-pressure eviction takes the
+  context away and leaves the surface permanently blank unless handled. A
+  renderer should (1) `preventDefault()` the loss event — otherwise the browser
+  never fires the restore event, (2) report `isContextLost(): boolean` so
+  `Scene.render` skips the pass instead of drawing against a dead context, and
+  (3) on restore re-acquire the context, re-apply DPR/size, and fire the
+  `onContextRestored(cb)` callback so the Scene repaints the cleared surface.
+  `CanvasRenderer` does this for Canvas2D and `ThreeRenderer` for WebGL.
 
 ## Verification
 

@@ -25,18 +25,46 @@ fix and is NOT optional for LLM-speed streams.
 
 | Symptom                                                                                                               | Likely area               | First fix                                                                                                                                                                                                              |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Idle page uses CPU                                                                                                    | render loop               | `scene.renderMode = 'onDemand'`, auto-throttle, avoid timers                                                                                                                                                           |
+| Idle page uses CPU                                                                                                    | render loop               | `scene.renderMode = 'onDemand'`, auto-throttle, avoid timers. A canvas scrolled fully **off-screen already auto-pauses** the rAF loop (IntersectionObserver) — don't hand-roll that.                                   |
 | Resize or stream stalls                                                                                               | layout/text               | hot width/content APIs, incremental append, debounce app compute                                                                                                                                                       |
 | Streaming jank (chat/logs)                                                                                            | append cadence            | batch tokens per rAF, one `Markdown` per message, `VirtualList` history — see `references/streaming-recipes.md`                                                                                                        |
-| Many rows/items slow                                                                                                  | entity count              | `VirtualList`, culling, aggregate decorative shapes                                                                                                                                                                    |
+| Many rows/items slow                                                                                                  | entity count              | `VirtualList`, `Table` `viewportHeight` virtualization, culling, aggregate decorative shapes                                                                                                                           |
 | Pointer feels delayed                                                                                                 | hit-test/event            | spatial hash boundaries, fewer overlapping interactive nodes                                                                                                                                                           |
 | 100k points slow                                                                                                      | renderer                  | WebGL point backend if draw cost dominates                                                                                                                                                                             |
 | Thousands of repeated short text runs/frame (danmaku, chat/log tails, particle labels) at low FPS while GPU sits idle | render (fillText shaping) | `TextRasterCache` (core ≥ 1.12.0): rasterize each `(font,color,text)` run once, blit with `drawImage`. Swapping fillText↔drawImage that doesn't move FPS means draw-count/overdraw, not shaping — batch to WebGL/MSDF. |
 | Particle simulation slow                                                                                              | compute                   | WebGPU only if compute is parallel and supported                                                                                                                                                                       |
 | Memory grows after navigation                                                                                         | lifecycle                 | `scene.destroy()`, remove observers/timers, dispose adapters/export jobs                                                                                                                                               |
 | Animation steps/stutters only when the page is otherwise idle                                                         | throttle visibility       | The entity animates from `update()` without overriding `hasPendingAnimations()` — the idle throttle can't see it. Use `setTransition`/`springTo`, or override it.                                                      |
-| MSDF text slow / wrong glyphs with two fonts                                                                          | GL text path              | On core ≤ 0.2.5 the atlas re-uploads every frame and one atlas slot is shared (a second font corrupts glyphs) — fixed in core 0.2.6; on old versions keep one MSDF font per scene.                                     |
-| `@vectojs/three` slows down as entity count grows                                                                     | renderer flush            | On three ≤ 0.1.3 every Scene flush was a full GL render → O(N²)/frame. Fixed in three 0.1.4 (single `present()` render).                                                                                               |
+
+## Already handled by the engine (don't re-solve)
+
+Measured on real hardware in both Chrome and Firefox. Reach for these facts
+before optimizing:
+
+| Area                      | What the engine does                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Off-screen canvas         | rAF loop **pauses** via `IntersectionObserver`, resumes on re-entry                                        |
+| Frame delta               | `dt` clamped to 100ms (`MAX_FRAME_DT`) — no substepping needed on your side                                |
+| `VirtualList` scroll math | Fenwick (binary-indexed) row heights: `prefix()`/`indexAt()` are O(log n), no per-frame scan               |
+| `Table`                   | Row virtualization (measured 149×/190× on large grids)                                                     |
+| `measureText`             | LRU keyed on **raw** text, so a cache hit skips Arabic shaping — 4.14µs → 0.34µs (~12×)                    |
+| `SpatialHashGrid`         | Large AABBs bypass cell enumeration (it is O(area/cellSize²)); one 6400² box went 1.2ms → <100µs to insert |
+| devtools audit            | Sibling-overlap is broad-phased, not O(k²) — 4000 rows 1280ms → 7.4ms (173×)                               |
+| `Graph3D`                 | Bounding sphere derived inline in `applyPositions` instead of a second full pass (2.3–3.2×)                |
+| Compute-entity collection | Cached per structure version — a scene with no `ComputeParticleEntity` no longer walks the tree each frame |
+
+**WASM acceleration** is opt-in and invisible: `enableWasmTransforms` /
+`enableWasmParticles` with `coreWasmUrl`. JS is the permanent fallback and stays
+bit-identical, so enabling it is never a behavior change. Measured 2–4× on the
+transform/AABB and particle kernels; it is *not* a fix for draw-count or
+overdraw problems.
+
+**Measured and deliberately NOT optimized** — don't "fix" these without new
+evidence: the `Entity.scene` getter's parent-chain walk (0.14µs per read at depth
+50), `Tabs` per-frame visibility scan (2µs/frame at 60 tabs), `MSDFFont.layout`
+(already 8–15M chars/s; its cost is JS result-object allocation, which a WASM
+kernel cannot remove), and the `LayoutWorker` (off-thread + 50ms debounced, so it
+never touches frame time).
 
 ## Compute greater than render
 

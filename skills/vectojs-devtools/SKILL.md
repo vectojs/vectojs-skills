@@ -3,11 +3,11 @@ name: vectojs-devtools
 description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.4.1+)
+# VectoJS Devtools (@vectojs/devtools, 0.6.0+)
 
 An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
 The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
-right edge of the page. Peer deps: `@vectojs/core >=1.0.0`, `@vectojs/ui >=1.0.0`.
+right edge of the page. Peer deps: `@vectojs/core >=1.0.0 <2.0.0`, and `@vectojs/ui >=1.0.0 <3.0.0` (optional).
 
 ## Attach / detach
 
@@ -15,7 +15,7 @@ right edge of the page. Peer deps: `@vectojs/core >=1.0.0`, `@vectojs/ui >=1.0.0
 import { attachDevtools } from "@vectojs/devtools";
 
 const devtools = attachDevtools(scene, {
-  width: 340, // panel width px (default 340)
+  width: 360, // panel width px (default 360)
   refreshInterval: 500, // auto-refresh ms while open; 0 disables (default 500)
   traceEvents: true, // opt-in pointer/wheel/keyboard routing trace
   dockSide: "right", // 'right' | 'left' (0.5.0; default 'right')
@@ -77,6 +77,8 @@ import {
   captureSnapshot,
   diffSnapshots, // 0.2.0
   createEventTrace, // 0.3.0
+  auditSceneSelection,
+  auditEntitySelection, // 0.6.0
 } from "@vectojs/devtools/headless";
 
 const hit = pickInScene(scene, x, y); // which entity owns this point?
@@ -156,12 +158,32 @@ Detects four kinds, deterministically sorted and JSON-safe:
   stacking belongs on the overlay, which is excluded by default).
 - `viewport-overflow` — entity with no sized ancestor drawn outside the canvas.
 
-Deliberate blind spots to know about: scrollable containers (`ScrollView`,
-`VirtualList`, `TreeView`, `Tree` — override via `scrollableTypes`, matched by
-`constructor.name`, so minified bundles need explicit names) exempt the
-**vertical** axis; `opacity: 0` entities are skipped entirely.
+Deliberate blind spots to know about: scrollable containers exempt the
+**vertical** axis, and `opacity: 0` entities are skipped entirely. The default
+scrollable set is `['ScrollView', 'VirtualList', 'TreeView', 'Tree']`, matched by
+`constructor.name` — so minified bundles need explicit names. Two caveats worth
+knowing: `'Tree'` matches no exported class (the component is `TreeView`), and
+`Table` is now vertically scrollable when virtualized but is **not** in the
+default set — pass `scrollableTypes: ['ScrollView', 'VirtualList', 'TreeView',
+'Table']` if a virtualized Table produces false `clip-overflow` findings.
 
 **CI gate pattern**: `expect(auditScene(scene)).toEqual([])` — "audit clean".
+
+## Selection auditing (0.6.0)
+
+`auditSceneSelection(scene)` / `auditEntitySelection(entity)` are the numeric
+answer to "the DOM selection highlight doesn't line up with the canvas glyphs."
+Use these instead of eyeballing a screenshot — they compare the projected
+selection geometry against the painted glyph boxes and report the drift.
+
+Reach for them when text is justified, RTL, rotated/mirrored, under non-uniform
+scale or browser zoom, or inside a grid projection — the cases where a
+projection-vs-canvas mismatch actually happens.
+
+**Audit performance**: the sibling-overlap check is broad-phased through a
+`SpatialHashGrid` rather than all-pairs, so auditing a long list or wide table is
+no longer quadratic (4000 rows: 1280ms → 7.4ms). It is still a dev-only path —
+don't ship it in a production frame loop.
 
 ## Snapshots & diffs (0.2.0)
 
@@ -190,7 +212,7 @@ state assertions in smoke tests.
 - On `@vectojs/devtools@0.4.3+`, the dock no longer intercepts pointer input over
   the host page's right edge — the dock container and its canvas are
   `pointer-events: none`, so a real host app's own right-edge content (tab close
-  buttons, toolbar buttons) sitting under the dock's 320px band stays clickable.
+  buttons, toolbar buttons) sitting under the dock's 360px band stays clickable.
   Only the panel's own a11y-projected controls opt back in via `auto`. On older
   versions the dock ate every click in that band silently — if a headless
   interaction test with `?debug` on ever fails only near the right edge, rule out

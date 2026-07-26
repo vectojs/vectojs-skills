@@ -14,20 +14,20 @@ re-enter the paradigm.
 
 ## The translation table (habit → VectoJS)
 
-| HTML/CSS habit                        | VectoJS way                                                                                     |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Add a `<div>`/`<span>` wrapper        | Add an `Entity` (or `Stack`/`Flow`/`Card` container) to the scene tree                          |
-| Write CSS rules / classes             | Set entity properties: `x`, `y`, `width`, `scaleX`, `opacity`, colors on the component          |
-| Flexbox / grid layout                 | `Stack` (vertical/horizontal + gap) and `Flow` (wrapping); positions are numbers you own        |
-| Media queries                         | Breakpoint functions on `scene.width`/`scene.height` (logical px); reposition and `markDirty()` |
-| CSS transition / keyframes            | `setTransition({ x: 'spring' })` then assign, or `animateTo`/`springTo` (promise-based)         |
-| `z-index`                             | Tree order (later siblings draw on top) or `scene.showOverlay()`                                |
-| `document.querySelector` / DOM events | Keep references to your entities; `entity.on('click' \| 'hover' \| 'wheel' \| 'keydown', …)`    |
-| `:hover` styles                       | `entity.on('hover')` / `on('pointerleave')` mutate state, scene repaints                        |
-| `overflow: scroll`                    | `ScrollView` / `VirtualList` / `TreeView` (one scroll owner per region)                         |
-| `<input>`, IME, clipboard             | `@vectojs/ui` `Input`/`TextArea` — the ONE place a real DOM element is correct                  |
-| Accessibility via ARIA markup         | `getA11yAttributes()` on the entity; the Scene projects the semantic node for you               |
-| SEO/find-in-page via HTML text        | `getContentProjection()` (core 0.2.7+) mirrors canvas text into the DOM automatically           |
+| HTML/CSS habit                        | VectoJS way                                                                                     |           |           |                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- | --------- | --------- | -------------- |
+| Add a `<div>`/`<span>` wrapper        | Add an `Entity` (or `Stack`/`Flow`/`Card` container) to the scene tree                          |           |           |                |
+| Write CSS rules / classes             | Set entity properties: `x`, `y`, `width`, `scaleX`, `opacity`, colors on the component          |           |           |                |
+| Flexbox / grid layout                 | `Stack` (vertical/horizontal + gap) and `Flow` (wrapping); positions are numbers you own        |           |           |                |
+| Media queries                         | Breakpoint functions on `scene.width`/`scene.height` (logical px); reposition and `markDirty()` |           |           |                |
+| CSS transition / keyframes            | `setTransition({ x: 'spring' })` then assign, or `animateTo`/`springTo` (promise-based)         |           |           |                |
+| `z-index`                             | Tree order (later siblings draw on top) or `scene.showOverlay()`                                |           |           |                |
+| `document.querySelector` / DOM events | Keep references to your entities; `entity.on('click' \                                          | 'hover' \ | 'wheel' \ | 'keydown', …)` |
+| `:hover` styles                       | `entity.on('hover')` / `on('pointerleave')` mutate state, scene repaints                        |           |           |                |
+| `overflow: scroll`                    | `ScrollView` / `VirtualList` / `TreeView` / virtualized `Table` (one owner per region)          |           |           |                |
+| `<input>`, IME, clipboard             | `@vectojs/ui` `Input`/`TextArea` — the ONE place a real DOM element is correct                  |           |           |                |
+| Accessibility via ARIA markup         | `getA11yAttributes()` on the entity; the Scene projects the semantic node for you               |           |           |                |
+| SEO/find-in-page via HTML text        | `getContentProjection()` (core 0.2.7+) mirrors canvas text into the DOM automatically           |           |           |                |
 
 **Never** hand-author sibling DOM next to the canvas for layout, styling, or
 events. The only DOM VectoJS wants is the DOM it projects itself.

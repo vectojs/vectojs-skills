@@ -1,0 +1,4 @@
+interface:
+  display_name: "VectoJS Graph3D"
+  short_description: "Build 3D force-directed graphs with VectoJS"
+  default_prompt: "Use $vectojs-graph3d to build or debug a 3D force-directed graph."

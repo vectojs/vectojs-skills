@@ -1,7 +1,7 @@
 # Cross-environment consistency (OS / browser / zoom / DPR)
 
 Distilled from https://vectojs.org/learn/cross-environment/ — read that page
-for the full rationale. Verified against core 1.9.2 / ui 1.9.5.
+for the full rationale. Verified against core 1.16.0 / ui 2.1.0.
 
 ## What the engine already guarantees
 

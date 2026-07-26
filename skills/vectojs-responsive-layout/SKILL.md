@@ -50,6 +50,29 @@ DPR-1-vs-2 test matrix), read `references/cross-environment.md`.
 | Hit/selection tests pass headless, fail on real laptops                         | Headless runs DPR 1; real machines are DPR 2 — run pointer/selection tests at `deviceScaleFactor: 2` too. Offset proportional to distance from origin ⇒ DPR bug.                                                                                                                                                                                                                 |
 | Text renders in a different font than it was measured with                      | Web-font race: construct text after `await document.fonts.ready`, re-measure from `document.fonts.onloadingdone` for lazy fonts.                                                                                                                                                                                                                                                 |
 
+## Scroll owners and RTL
+
+**One scroll owner per region.** `ScrollView`, `VirtualList`, `TreeView`, and a
+virtualized `Table` (`viewportHeight`) each own their region's scroll. Nesting two
+owners, or adding your own wheel/drag handler on top of one, produces
+double-scrolling. All four also **drag-to-scroll on touch** (the content follows
+the finger 1:1), so don't add a touch handler either.
+
+Sizing notes that bite:
+
+- `VirtualList` needs a sane `estimatedRowHeight`; a wrong estimate shows as a
+  scrollbar that jumps as real heights are measured.
+- `Table` virtualizes only when you give it `viewportHeight`. Without it the
+  whole grid mounts.
+- `TreeView` fires its toggle on `pointerup` and only within ~6px of the
+  pointerdown, so a drag scrolls instead of expanding a row.
+
+**RTL is a layout concern, not just a text one.** An RTL paragraph right-aligns,
+and selection anchors at the visual origin. For the a11y layer, set
+`readingDirection: 'rtl'` on the Scene so **tab order** reverses inline within
+each visual row — tab order follows where things are drawn, not the order they
+were added, so an RTL UI that skips this tabs in the wrong direction.
+
 ## Verification
 
 Check at least:
@@ -58,4 +81,5 @@ Check at least:
 - desktop width;
 - browser zoom 125% and 150%;
 - keyboard navigation/focus order;
+- an RTL pass (`readingDirection: 'rtl'`) if the app is ever localized;
 - role-based automation for interactive controls.

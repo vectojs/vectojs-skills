@@ -1,6 +1,6 @@
 # Streaming & real-time text recipes
 
-Verified against published core 1.9.2 / ui 1.9.5. Full prose version:
+Verified against core 1.16.0 / ui 2.1.0. Full prose version:
 https://vectojs.org/learn/streaming/
 
 ## Rule zero: batch per frame, not per token
