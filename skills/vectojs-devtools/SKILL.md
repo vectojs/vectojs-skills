@@ -3,7 +3,7 @@ name: vectojs-devtools
 description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.6.0+)
+# VectoJS Devtools (@vectojs/devtools, 0.9.0+)
 
 An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
 The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
@@ -79,6 +79,23 @@ import {
   createEventTrace, // 0.3.0
   auditSceneSelection,
   auditEntitySelection, // 0.6.0
+  inspectA11y,
+  auditA11y,
+  a11yReadingOrder, // 0.8.0
+  explainHitTest,
+  formatHitExplanation, // 0.8.0
+  highlightGeometry,
+  sampleHitRegion, // 0.9.0
+  inspectText,
+  shapeProbe,
+  auditTextShaping, // 0.9.0
+  inspectMarkdownStream,
+  auditMarkdownStreaming, // 0.9.0
+  inspectGpu,
+  auditGpu, // 0.9.0
+  registerDevtoolsPlugin, // 0.9.0
+  createDevtoolsBackend,
+  createDevtoolsClient, // 0.9.0
 } from "@vectojs/devtools/headless";
 
 const hit = pickInScene(scene, x, y); // which entity owns this point?
@@ -120,16 +137,21 @@ asserting the finalized trace entry.
 
 Reach for numbers before screenshots:
 
-| Symptom                                  | Workflow                                                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Which entity owns this pixel?            | `pickInScene(scene, x, y)` → `inspectEntity(hit)`                                                                                     |
-| Entity positioned/sized wrong            | `inspectEntity` world bounds, then walk ancestors — first one with wrong bounds owns the bug (`entityPath` names the chain)           |
-| Something overflows/overlaps somewhere   | `auditScene(scene)` — findings carry entityPath + per-edge overflow amounts                                                           |
-| Interaction moved something it shouldn't | `captureSnapshot` → interact → `diffSnapshots`                                                                                        |
-| Click/wheel/key goes to the wrong place  | `createEventTrace` — source/targetPath/coords + final `defaultPrevented`                                                              |
-| Drag-selection or copy intercepted       | Trace entries with `source === "content"`; check `defaultPrevented` + targetPath                                                      |
-| Drag stuck / never commits               | Pointer trace transaction: `pointerdown` → moves → exactly one `pointerup`/`pointercancel`; missing terminal = projection/capture bug |
-| Selection drifts from pixels after zoom  | Not a devtools bug — the app owns sizing and never called `scene.resize()` (Firefox Range recalibration)                              |
+| Symptom                                  | Workflow                                                                                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Which entity owns this pixel?            | `pickInScene(scene, x, y)` → `inspectEntity(hit)`                                                                                         |
+| Entity positioned/sized wrong            | `inspectEntity` world bounds, then walk ancestors — first one with wrong bounds owns the bug (`entityPath` names the chain)               |
+| Something overflows/overlaps somewhere   | `auditScene(scene)` — findings carry entityPath + per-edge overflow amounts                                                               |
+| Interaction moved something it shouldn't | `captureSnapshot` → interact → `diffSnapshots` (paired by stable key, so a reordered list still attributes each change to the right node) |
+| A click does nothing                     | `explainHitTest(scene, x, y)` → per-candidate verdict incl. why the expected entity lost                                                  |
+| Hit area disagrees with what's painted   | `highlightGeometry` layer divergence; `sampleHitRegion` when the shape is not a box                                                       |
+| Text renders wrong / RTL misordered      | `inspectText(entity)`, or `shapeProbe(str)` to test a string not in the scene                                                             |
+| Streaming Markdown gets slower over time | `inspectMarkdownStream(entity)` → `tailFraction`; token reuse can look healthy while characters are re-read                               |
+| Frame cost with no obvious cause         | `inspectGpu(scene)` after `setDrawCounters(true)`; check `unavailable` before reading a zero                                              |
+| Click/wheel/key goes to the wrong place  | `createEventTrace` — source/targetPath/coords + final `defaultPrevented`                                                                  |
+| Drag-selection or copy intercepted       | Trace entries with `source === "content"`; check `defaultPrevented` + targetPath                                                          |
+| Drag stuck / never commits               | Pointer trace transaction: `pointerdown` → moves → exactly one `pointerup`/`pointercancel`; missing terminal = projection/capture bug     |
+| Selection drifts from pixels after zoom  | Not a devtools bug — the app owns sizing and never called `scene.resize()` (Firefox Range recalibration)                                  |
 
 `entityPath(entity)` returns the ancestry chain as `"Scene > Card#<id8> > Text#<id8>"`
 (ids truncated to 8 chars) — note snapshot-diff paths use `type[index]` chains
@@ -198,6 +220,94 @@ Diffs are keyed by **structural path** (`type[index]` chains), never by entity
 id — ids are random per run. Default-valued props (opacity 1, flags false) are
 omitted from snapshots so JSON diffs stay quiet. Use snapshot-pairs as golden-
 state assertions in smoke tests.
+
+## Why is this NOT being hit? (0.8.0)
+
+`explainHitTest(scene, x, y)` mirrors `Scene.findHitRecursively`'s own rejection
+conditions and returns a verdict per candidate: `accepted`, `invisible`,
+`clipped`, `pointer-transparent`, `outside-shape`, `occluded`. It deliberately
+does not short-circuit, so occluded candidates are still enumerated — the entity
+you expected to be hit appears in the list with the reason it lost.
+
+```ts
+console.log(formatHitExplanation(explainHitTest(scene, 120, 240)));
+```
+
+## Highlight geometry layers (0.9.0)
+
+`highlightGeometry(scene, entity)` returns each box the entity carries as a **true
+polygon** in scene coordinates, flagged when it drifts from the layout box:
+`layout` (real edges under rotation, which an AABB loses), `render`
+(`getBounds()`), `clip` (nearest clipping ancestor), `content` (projected content
+element), `a11y` (accessibility element). Divergence between them is the bug class
+this exists to reveal — a control whose hit area drifted from its paint, text
+painted outside the box that clips it.
+
+`panel.setHighlightLayers(['layout', 'clip'])` chooses what the panel draws;
+default stays `['aabb']`.
+
+`sampleHitRegion(entity)` covers the one layer with no retrievable geometry:
+`isPointInside` is a predicate, so the region is approximated by probing a grid.
+Off by default (cost is quadratic in entity size) and compared by **area
+coverage**, not extent — a circle inscribed in its box has the box's exact extent
+while accepting ~79% of its points, so an extent check reports the most common
+divergence as none.
+
+## Text, Markdown and GPU inspectors (0.9.0)
+
+- `inspectText(entity)` — bidi base direction and per-character levels collapsed
+  into runs, L2 reversal segments, the visual-order permutation, grapheme
+  clusters, and per-glyph x/advance/level. `shapeProbe(text)` shapes an arbitrary
+  string through the real pipeline, so a bidi or cluster question is settled
+  without editing the app. `auditTextShaping(scene)` names glyphs absent from the
+  atlas — those pay a canvas `measureText` each.
+- `inspectMarkdownStream(entity)` — appends, worker round-trip time, and the
+  stable-prefix vs changed-tail split in **characters**. Characters matter: a
+  stream can reuse 95% of its tokens while re-reading 60% of its characters every
+  chunk, and only the character ratio shows the O(document)-per-chunk shape.
+- `inspectGpu(scene)` — backend `kind`, Canvas2D draw counters (opt-in via
+  `setDrawCounters(true)`), WebGL draw calls and the POINTS-vs-quad circle split,
+  WebGPU state, plus phase timings when `setPhaseTiming(true)` is on.
+
+**These report absence honestly.** Seven capabilities return an `unavailable`
+entry with a reason rather than a plausible number: glyph ids cannot exist (the
+atlas is codepoint-keyed), no script itemizer exists, nothing names the font used
+for a run, GPU timestamp queries need a different device request, and Canvas2D has
+no pixel-coverage readback so `overdrawRatio` is a labelled proxy that overstates.
+Read `unavailable` before concluding a metric is zero.
+
+## Contributing a panel: the plugin protocol (0.9.0)
+
+```ts
+registerDevtoolsPlugin({
+  id: "my-pkg",
+  inspectors: [{ id: "my-view", label: "Mine", rows: ({ selection }) => [...] }],
+  audits: [{ id: "sanity", run: ({ scene }) => [...] }],
+  commands: [{ id: "reset", label: "Reset", run: ({ scene }) => {...} }],
+});
+```
+
+Returns a deregister function. This is how `markdown`, `text`, `graph3d` and
+`three` contribute panels **without** `@vectojs/devtools` importing them — a
+hardcoded tab per package would invert the dependency graph. Every call into
+plugin code is wrapped individually, so one broken plugin cannot take the panel
+down. Entities describe themselves via `getDevtoolsDescriptor()`; DevTools holds no
+table of component types, because that would gate every new component on a debug
+tool change and break under minified builds where `constructor.name` is unreliable.
+
+## Driving DevTools over a bridge (0.9.0)
+
+`createDevtoolsBackend(scene, transport)` serves 21 methods (tree, inspect, pick,
+audits, snapshot/diff, hit explanation, text, markdown, GPU, plugins, commands);
+`createDevtoolsClient(transport)` issues requests with a timeout. Three
+transports: an in-process pair (what the protocol is tested against, no browser
+needed), `createWindowTransport` over `postMessage`, or your own.
+
+**Origin enforcement has no permissive default.** The backend describes the whole
+scene, including text content and accessible names, so a request carrying an
+origin is refused unless it is in `allowedOrigins` — and omitting that option
+refuses every cross-document sender. In-process callers carry no origin and are
+served, which is the panel and agent path.
 
 ## Gotchas
 
