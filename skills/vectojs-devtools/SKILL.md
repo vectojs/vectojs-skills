@@ -148,6 +148,7 @@ Reach for numbers before screenshots:
 | Text renders wrong / RTL misordered      | `inspectText(entity)`, or `shapeProbe(str)` to test a string not in the scene                                                             |
 | Streaming Markdown gets slower over time | `inspectMarkdownStream(entity)` → `tailFraction`; token reuse can look healthy while characters are re-read                               |
 | Frame cost with no obvious cause         | `inspectGpu(scene)` after `setDrawCounters(true)`; check `unavailable` before reading a zero                                              |
+| WASM/GPU acceleration "on" but no gain   | `inspectAccelerators(scene)` — a backend getter reports INSTALLED, not that it ran; read `activeThisFrame` and `reason`                   |
 | Click/wheel/key goes to the wrong place  | `createEventTrace` — source/targetPath/coords + final `defaultPrevented`                                                                  |
 | Drag-selection or copy intercepted       | Trace entries with `source === "content"`; check `defaultPrevented` + targetPath                                                          |
 | Drag stuck / never commits               | Pointer trace transaction: `pointerdown` → moves → exactly one `pointerup`/`pointercancel`; missing terminal = projection/capture bug     |
@@ -263,8 +264,16 @@ divergence as none.
   atlas — those pay a canvas `measureText` each.
 - `inspectMarkdownStream(entity)` — appends, worker round-trip time, and the
   stable-prefix vs changed-tail split in **characters**. Characters matter: a
-  stream can reuse 95% of its tokens while re-reading 60% of its characters every
+  stream can keep 95% of its tokens while re-reading 60% of its characters every
   chunk, and only the character ratio shows the O(document)-per-chunk shape.
+  Since 0.11.0 the token fields are named for what they measure —
+  `tokensPrefixMatched`, `tokensReturned`, `tokenPrefixReuseRatio` — and
+  `lexerMs` / `sourceCharsLexed` report the parser cost that was invisible
+  before. `marked` has no incremental lexing API, so every chunk re-lexes the
+  whole accumulated source and `sourceCharsLexed` grows ~O(n²) over a stream.
+  The old names (`tokensReused`, `tokensRelexed`, `reuseRatio`) were removed
+  rather than aliased: they read as though a high match rate meant less lexing,
+  which it never did.
 - `inspectGpu(scene)` — backend `kind`, Canvas2D draw counters (opt-in via
   `setDrawCounters(true)`), WebGL draw calls and the POINTS-vs-quad circle split,
   WebGPU state, plus phase timings when `setPhaseTiming(true)` is on.
@@ -275,6 +284,32 @@ atlas is codepoint-keyed), no script itemizer exists, nothing names the font use
 for a run, GPU timestamp queries need a different device request, and Canvas2D has
 no pixel-coverage readback so `overdrawRatio` is a labelled proxy that overstates.
 Read `unavailable` before concluding a metric is zero.
+
+## Did the accelerators actually run? (0.10.0)
+
+`inspectAccelerators(scene)` answers a question the `Scene` getters cannot.
+`transformBackend`, `animBackend` and `hitTestBackend` report that a backend is
+**installed**, so reading `'wasm'` and concluding the work was accelerated is
+wrong whenever a gate never opened or a kernel declined. (`particleBackend` is
+not even a status getter — it is the writable `'auto' | 'webgpu' | 'cpu'`
+*request*.) A scene can hold four WASM backends and run every frame entirely in
+JS.
+
+Each of the four accelerators — `transform`, `animation`, `hitTest`,
+`particle` — reports `{ available, activeThisFrame, reason, path, faulted,
+explanation }`, and the inspection carries `activeCount`, `availableCount`,
+`faulted[]`, `summary`. `reason` separates a tuning outcome from a fault:
+
+| `reason`           | Meaning                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'active'`         | it ran this frame, on `path`                                                                                                                  |
+| `'not-installed'`  | no backend; JS fallback. Enable via the matching `enableWasm*`                                                                                |
+| `'below-gate'`     | installed, but the workload is under its measured break-even, so JS is genuinely faster. **Working as designed**                              |
+| `'rejected'`       | installed and gated in, then refused its own arguments and wrote nothing. **A fault** — check the count against the capacity it was sized for |
+| `'not-applicable'` | nothing to do this frame (hit-test builds its grid lazily, on a pointer query)                                                                |
+
+`auditAccelerators` fires **only** on `'rejected'`. Warning about a gate that is
+working correctly would train you to ignore the audit.
 
 ## Contributing a panel: the plugin protocol (0.9.0)
 

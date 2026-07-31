@@ -1,7 +1,7 @@
---- name: vectojs-performance description: Use when diagnosing or optimizing
-VectoJS performance, frame drops, layout/text cost, high entity counts,
-compute-heavy workloads, WebGL/WebGPU backend choices, virtualization, memory
-leaks, or benchmark methodology. ---
+---
+name: vectojs-performance
+description: Use when diagnosing or optimizing VectoJS performance, frame drops, layout/text cost, high entity counts, compute-heavy workloads, WebGL/WebGPU backend choices, virtualization, memory leaks, or benchmark methodology.
+---
 
 # VectoJS Performance
 
