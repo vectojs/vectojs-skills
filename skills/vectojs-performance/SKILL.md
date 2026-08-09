@@ -52,7 +52,7 @@ before optimizing:
 | Off-screen canvas         | rAF loop **pauses** via `IntersectionObserver`, resumes on re-entry                                        |
 | Frame delta               | `dt` clamped to 100ms (`MAX_FRAME_DT`) — no substepping needed on your side                                |
 | `VirtualList` scroll math | Fenwick (binary-indexed) row heights: `prefix()`/`indexAt()` are O(log n), no per-frame scan               |
-| `Table`                   | Row virtualization (measured 149×/190× on large grids)                                                     |
+| `Table`                   | Row virtualization (measured 117×/251× Chrome 151/Firefox 153 at 5k rows; ratio, not per-frame Hz)         |
 | `measureText`             | LRU keyed on **raw** text, so a cache hit skips Arabic shaping — 4.14µs → 0.34µs (~12×)                    |
 | `SpatialHashGrid`         | Large AABBs bypass cell enumeration (it is O(area/cellSize²)); one 6400² box went 1.2ms → <100µs to insert |
 | devtools audit            | Sibling-overlap is broad-phased, not O(k²) — 4000 rows 1280ms → 7.4ms (173×)                               |
