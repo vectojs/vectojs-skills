@@ -300,7 +300,7 @@ grid projections under DPR, browser zoom, rotation, reflection, and non-uniform
 scale.
 
 `Markdown` and `CodeBlock` live in **`@vectojs/markdown`** (they moved out of
-`@vectojs/ui` in ui 2.0.0), which peers on `core >=1.8.0 <2` and `ui >=2.0.0 <3`.
+`@vectojs/ui` in ui 2.0.0), which peers on `core >=1.25.0 <2` and `ui >=2.6.0 <3`.
 Read the selectable grid recipe in `references/scene-recipes.md` before building
 a custom implementation.
 

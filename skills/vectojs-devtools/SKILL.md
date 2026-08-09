@@ -90,12 +90,12 @@ import {
   shapeProbe,
   auditTextShaping, // 0.9.0
   inspectMarkdownStream,
-  auditMarkdownStreaming, // 0.9.0
+  auditMarkdownStreaming, // 0.9.0 (fields renamed in 0.11.0)
   inspectGpu,
   auditGpu, // 0.9.0
   inspectAccelerators,
   auditAccelerators, // 0.10.0
-  diagnoseDirty, // 0.11.0
+  diagnoseDirty, // 0.7.0
   registerDevtoolsPlugin, // 0.9.0
   createDevtoolsBackend,
   createDevtoolsClient, // 0.9.0
@@ -187,12 +187,12 @@ Detects four kinds, deterministically sorted and JSON-safe:
 
 Deliberate blind spots to know about: scrollable containers exempt the
 **vertical** axis, and `opacity: 0` entities are skipped entirely. The default
-scrollable set is `['ScrollView', 'VirtualList', 'TreeView', 'Tree']`, matched by
-`constructor.name` — so minified bundles need explicit names. Two caveats worth
-knowing: `'Tree'` matches no exported class (the component is `TreeView`), and
-`Table` is now vertically scrollable when virtualized but is **not** in the
-default set — pass `scrollableTypes: ['ScrollView', 'VirtualList', 'TreeView',
-'Table']` if a virtualized Table produces false `clip-overflow` findings.
+scrollable set is `['ScrollView', 'VirtualList', 'TreeView', 'Table']`, matched
+by `constructor.name` — so minified bundles need explicit names. Note the set
+lists `TreeView` (the exported class name; an earlier default said `'Tree'`,
+which matched nothing) and now includes `Table`, which is vertically scrollable
+once virtualized — a virtualized `Table` no longer needs a custom
+`scrollableTypes` to avoid false `clip-overflow` findings.
 
 **CI gate pattern**: `expect(auditScene(scene)).toEqual([])` — "audit clean".
 
@@ -315,7 +315,7 @@ explanation }`, and the inspection carries `activeCount`, `availableCount`,
 `auditAccelerators` fires **only** on `'rejected'`. Warning about a gate that is
 working correctly would train you to ignore the audit.
 
-## Why won't this `onDemand` scene sleep? (0.10.0)
+## Why won't this `onDemand` scene sleep? (0.7.0)
 
 `renderMode: 'onDemand'` silently degrades to always-on the moment something
 invalidates the scene every frame, and `scene.dirty` says only _that_ it happened,

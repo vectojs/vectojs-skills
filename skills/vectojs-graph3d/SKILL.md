@@ -6,8 +6,10 @@ description: Use when building or debugging a 3D force-directed graph with @vect
 # VectoJS Graph3D
 
 `@vectojs/graph3d` renders a force-directed graph as **instanced** Three.js
-geometry and keeps layout strictly separate from rendering. Requires
-`@vectojs/three` and `three` alongside it.
+geometry and keeps layout strictly separate from rendering. Its only peer is
+`three`; it does **not** depend on `@vectojs/three` or `@vectojs/core`, so a
+graph can be dropped into a plain Three.js app. (`@vectojs/three` becomes
+relevant only if you also want VectoJS UI panels in the same 3D scene.)
 
 ## Architecture: layout and renderer are decoupled
 
