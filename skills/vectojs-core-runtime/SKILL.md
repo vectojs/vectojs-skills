@@ -22,6 +22,15 @@ For copyable examples, read `references/scene-recipes.md`.
 
 `@vectojs/core` owns the `Scene`/`Entity` runtime, renderers (Canvas/SVG/WebGL/WebGPU), a11y projection, and the `Entity`-based text renderers (`MSDFTextEntity`, `SVGEntity`, `TextEntity`/`GridTextEntity`). The lower-level engines are now standalone packages: `@vectojs/text` (BiDi, Arabic shaping, typography, MSDF fonts, prepared content grids), `@vectojs/layout` (`LayoutEngine`, `LayoutWorkerManager`, measurement), `@vectojs/math` (`SpatialHashGrid`, `SpringPhysics`), and `@vectojs/animation` (`Easing`, `TweenDriver`, `SpringDriver`). `@vectojs/core` depends on and re-exports all four, so `import { LayoutEngine, SpringPhysics, … } from '@vectojs/core'` and the `@vectojs/core/{text,layout,renderer}` subpaths keep working unchanged — prefer importing from the standalone packages only when you want a smaller dependency surface.
 
+Above `core` sit `@vectojs/ui` (components, zero runtime deps) and then
+`@vectojs/markdown` (`Markdown`, `CodeBlock`), which composes `ui` and therefore
+must be imported from `@vectojs/markdown` — `ui` cannot re-export it without a
+cycle. Markdown's math comes from `@vectojs/tex`, a zero-DOM vendored KaTeX
+parse/layout kernel with a self-contained SVG emit layer, loaded dynamically on
+the first formula. It is **not** MathJax; `mathjax-full` is no longer a
+dependency anywhere, though the public entry points keep their historical names
+`preloadMathJax()` / `isMathJaxReady()`.
+
 ## Architecture rules
 
 - Treat VectoJS as a retained scene runtime, not a DOM component library.
@@ -33,18 +42,18 @@ For copyable examples, read `references/scene-recipes.md`.
 
 ## Common mistakes
 
-| Mistake                                                 | Correction                                                                                                                                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                                                                                                           |
-| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                                                                                                          |
-| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                                                                                                   |
-| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.                                                                                              |
-| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                                                                                                         |
-| Subclassing `Entity` for a plain box/dot/group          | Use the built-in `Rect`/`Circle`/`Group` primitives (1.9.0+); reach for a subclass only when you need custom `render`/hit-test logic.                                                 |
-| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them.                                                                                 |
-| `interactive = true` on thousands of ephemeral entities  | Don't. Each one projects a real DOM element, and cost per entity **worsens** with count (measured: 1k → 6.4ms/frame, 20k → 715ms Chrome / 2737ms Firefox). Label the layer once and hit-test with `scene.findEntityAt(x, y)`, which resolves entities regardless of `interactive`. |
-| Ignoring DPR² render cost on HiDPI screens              | Pass `maxDPR: 2` in `SceneOptions` to cap the backing-store pixel count. `maxDPR` is reapplied on every `resize()`. (Core 1.10.0+)                                                    |
-| Custom motion in `update()` drops to ~2fps              | Drive motion through `setTransition`/`animateTo`/`springTo`, or override `hasPendingAnimations()` to return `true` while moving. Core 1.11.0+ warns in dev mode when this is missing. |
+| Mistake                                                 | Correction                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passing `renderMode` to `new Scene()`                   | Create the scene, then set `scene.renderMode = 'onDemand'`.                                                                                                                                                                                                                        |
+| Pixel-coordinate tests for controls                     | Use projected DOM roles for tests: `getByRole(...).click()`.                                                                                                                                                                                                                       |
+| Forgetting teardown                                     | Call `scene.destroy()` to release renderers, observers, workers, and projected DOM.                                                                                                                                                                                                |
+| Custom canvas input for text                            | Use `@vectojs/ui` `Input`/`TextArea` so IME, selection, clipboard, and undo stay native.                                                                                                                                                                                           |
+| Rebuilding text every frame                             | Reuse entities and update width/content through the hot APIs where available.                                                                                                                                                                                                      |
+| Subclassing `Entity` for a plain box/dot/group          | Use the built-in `Rect`/`Circle`/`Group` primitives (1.9.0+); reach for a subclass only when you need custom `render`/hit-test logic.                                                                                                                                              |
+| Discarding dynamic interactive children without cleanup | Call `scene.detachA11y(child)` first — `syncA11y` creates/updates shadow nodes but never prunes them.                                                                                                                                                                              |
+| `interactive = true` on thousands of ephemeral entities | Don't. Each one projects a real DOM element, and cost per entity **worsens** with count (measured: 1k → 6.4ms/frame, 20k → 715ms Chrome / 2737ms Firefox). Label the layer once and hit-test with `scene.findEntityAt(x, y)`, which resolves entities regardless of `interactive`. |
+| Ignoring DPR² render cost on HiDPI screens              | Pass `maxDPR: 2` in `SceneOptions` to cap the backing-store pixel count. `maxDPR` is reapplied on every `resize()`. (Core 1.10.0+)                                                                                                                                                 |
+| Custom motion in `update()` drops to ~2fps              | Drive motion through `setTransition`/`animateTo`/`springTo`, or override `hasPendingAnimations()` to return `true` while moving. Core 1.11.0+ warns in dev mode when this is missing.                                                                                              |
 
 ## Programmatic focus: `Entity.focus()` (Core 1.11.0+)
 
@@ -147,13 +156,13 @@ instead of going stale. Note `false` is distinct from `undefined`
 Beyond the element/native fields (`tag`, `href`, `target`, `src`, `alt`,
 `inputType`, `placeholder`, `value`, `textInputStyle`):
 
-| Group | Fields |
-| --- | --- |
-| Naming | `label`, `labelledby`, `describedby` |
-| State | `checked`, `disabled`, `selected`, `expanded`, `required`, `invalid`, `valuemin`, `valuemax`, `level` |
-| Relationships | `controls`, `haspopup`, `activedescendant`, `ariaModal` |
-| Live regions | `live` (`'off'\|'polite'\|'assertive'`), `atomic`, `relevant` |
-| Pointer | `pointerEvents` (`'auto'\|'none'`) |
+| Group         | Fields                                                                                                |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| Naming        | `label`, `labelledby`, `describedby`                                                                  |
+| State         | `checked`, `disabled`, `selected`, `expanded`, `required`, `invalid`, `valuemin`, `valuemax`, `level` |
+| Relationships | `controls`, `haspopup`, `activedescendant`, `ariaModal`                                               |
+| Live regions  | `live` (`'off'\|'polite'\|'assertive'`), `atomic`, `relevant`                                         |
+| Pointer       | `pointerEvents` (`'auto'\|'none'`)                                                                    |
 
 `required`/`invalid` are the only way a canvas-drawn form is announceable —
 without them a validation state is invisible to AT. `live`/`atomic`/`relevant`
@@ -176,7 +185,7 @@ one):
    keyboard focus and AT-synthesized `click` still work.
 
 Pool only visible children, so a virtualized list projects O(viewport) hotspots
-rather than one per row. Scroll the target into view *before* moving focus to it.
+rather than one per row. Scroll the target into view _before_ moving focus to it.
 
 ### Tab order follows visual reading order
 
@@ -299,7 +308,7 @@ a custom implementation.
 
 - **Animating from `update()`**: prefer overriding `hasPendingAnimations()` to
   report "still moving", or drive motion through
-  `setTransition`/`animateTo`/`springTo`. `markDirty()` called *inside*
+  `setTransition`/`animateTo`/`springTo`. `markDirty()` called _inside_
   `update()` also works — the dirty flag is consumed before the update/render
   pass, so the mark survives to the next frame.
 - **`dt` is clamped to 100ms** (`MAX_FRAME_DT`). After a backgrounded tab, a
@@ -314,7 +323,7 @@ a custom implementation.
   visibility pause on top of it.
 - **Embedded (non-fullscreen) canvases**: pass `disableWindowResize: true` and
   drive size with `scene.resize(w, h)`.
-- **Custom `IRenderer` implementers**: `flush()` runs around *every*
+- **Custom `IRenderer` implementers**: `flush()` runs around _every_
   non-batched node each frame — it must only commit the pending primitive batch
   (near-zero cost when empty). Do end-of-frame work (a real GL render) in the
   optional `present()` hook, called exactly once per render pass. If you own a
@@ -330,12 +339,17 @@ a custom implementation.
 
 ## Verification
 
-Run the package or app’s normal checks. For the VectoJS monorepo, useful gates are:
+Run the package or app’s normal checks. The VectoJS monorepo drives everything
+through `just` (thin wrappers over the pinned toolchain, so local and CI match):
 
 ```bash
-bun run test
-bun run build
-bun run --cwd packages/core test:e2e
-oxlint packages/core/src packages/ui/src packages/three/src
-prettier --check "**/*.{js,ts,json,md,html,yaml}"
+just verify          # = just check + just test, the pre-push gate
+just check           # oxfmt --check, oxlint, markdownlint, shellcheck/shfmt, actionlint
+just test            # unit tests, every package
+just test-pkg core   # one package
+just e2e             # real-browser e2e (HiDPI + text projection)
 ```
+
+`oxfmt` is the only formatting authority — do **not** run `prettier` as a check.
+A `.prettierrc.yaml` exists solely so editor tooling that resolves Prettier
+without config does not reformat whole files with Prettier's defaults.

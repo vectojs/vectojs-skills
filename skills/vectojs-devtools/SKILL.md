@@ -3,7 +3,7 @@ name: vectojs-devtools
 description: Use when inspecting or debugging a live VectoJS scene with @vectojs/devtools — the VMT inspector panel, entity picking, tree/model queries, geometry readouts, layout audits (text overflow, overlap), scene snapshots/diffs, or when you need to locate which entity owns a pixel or why an entity is positioned/sized wrong.
 ---
 
-# VectoJS Devtools (@vectojs/devtools, 0.9.0+)
+# VectoJS Devtools (@vectojs/devtools, 0.11.0+)
 
 An in-page Virtual Math Tree inspector plus a headless audit/capture layer.
 The panel itself is a VectoJS Scene (dogfooding `@vectojs/ui`), docked to the
@@ -93,6 +93,9 @@ import {
   auditMarkdownStreaming, // 0.9.0
   inspectGpu,
   auditGpu, // 0.9.0
+  inspectAccelerators,
+  auditAccelerators, // 0.10.0
+  diagnoseDirty, // 0.11.0
   registerDevtoolsPlugin, // 0.9.0
   createDevtoolsBackend,
   createDevtoolsClient, // 0.9.0
@@ -149,6 +152,7 @@ Reach for numbers before screenshots:
 | Streaming Markdown gets slower over time | `inspectMarkdownStream(entity)` → `tailFraction`; token reuse can look healthy while characters are re-read                               |
 | Frame cost with no obvious cause         | `inspectGpu(scene)` after `setDrawCounters(true)`; check `unavailable` before reading a zero                                              |
 | WASM/GPU acceleration "on" but no gain   | `inspectAccelerators(scene)` — a backend getter reports INSTALLED, not that it ran; read `activeThisFrame` and `reason`                   |
+| `onDemand` scene never sleeps            | `scene.setDirtyTracking(true)`, run it, then `diagnoseDirty(scene)` — `dirty === true` names no cause; this does                          |
 | Click/wheel/key goes to the wrong place  | `createEventTrace` — source/targetPath/coords + final `defaultPrevented`                                                                  |
 | Drag-selection or copy intercepted       | Trace entries with `source === "content"`; check `defaultPrevented` + targetPath                                                          |
 | Drag stuck / never commits               | Pointer trace transaction: `pointerdown` → moves → exactly one `pointerup`/`pointercancel`; missing terminal = projection/capture bug     |
@@ -292,7 +296,7 @@ Read `unavailable` before concluding a metric is zero.
 **installed**, so reading `'wasm'` and concluding the work was accelerated is
 wrong whenever a gate never opened or a kernel declined. (`particleBackend` is
 not even a status getter — it is the writable `'auto' | 'webgpu' | 'cpu'`
-*request*.) A scene can hold four WASM backends and run every frame entirely in
+_request_.) A scene can hold four WASM backends and run every frame entirely in
 JS.
 
 Each of the four accelerators — `transform`, `animation`, `hitTest`,
@@ -310,6 +314,49 @@ explanation }`, and the inspection carries `activeCount`, `availableCount`,
 
 `auditAccelerators` fires **only** on `'rejected'`. Warning about a gate that is
 working correctly would train you to ignore the audit.
+
+## Why won't this `onDemand` scene sleep? (0.10.0)
+
+`renderMode: 'onDemand'` silently degrades to always-on the moment something
+invalidates the scene every frame, and `scene.dirty` says only _that_ it happened,
+never _what_ did it. Don't bisect `markDirty()` call sites by hand:
+
+```ts
+import { diagnoseDirty } from "@vectojs/devtools/headless";
+
+scene.setDirtyTracking(true); // off by default
+// …run the scene for a while…
+const d = diagnoseDirty(scene, { frames: 300 });
+console.log(d.summary); // safe to print straight into a report
+console.log(d.everyFrame); // the causes that actually keep the loop awake
+```
+
+`DirtyDiagnosis` carries `renderMode` (`'always'` makes the rest moot), `frames`,
+`causes` sorted most-frequent-first, and `everyFrame` — causes at `perFrame >= 1`.
+Anything rarer is not why the scene is awake. Each `DirtyCause` has
+`entity`/`reason`/`property`/`count`/`perFrame`/`firstFrame`/`lastFrame`.
+
+The raw counters are on `Scene` if you want them without the verdict:
+`setDirtyTracking(bool)`, `dirtyTracking`, `dirtyReasons`, `clearDirtyReasons()`.
+Tracking is opt-in, so leave it off in production.
+
+## Markdown stream metrics were renamed in 0.11.0
+
+If you read `inspectMarkdownStream` or the `low-token-reuse` finding, three
+fields changed name — and they changed because the old names misled. `marked` has
+no incremental lexing API, so the worker re-lexes the **whole accumulated source**
+on every chunk; the old names implied a high match rate meant less lexing.
+
+| before          | after                   | what it actually counts                         |
+| --------------- | ----------------------- | ----------------------------------------------- |
+| `tokensReused`  | `tokensPrefixMatched`   | leading tokens whose `raw` was unchanged        |
+| `tokensRelexed` | `tokensReturned`        | tokens in the changed suffix — transfer payload |
+| `reuseRatio`    | `tokenPrefixReuseRatio` | `matched / (matched + returned)`                |
+
+No aliases were kept: the defect was that they mislead. `MarkdownStreamInfo` also
+gains `lexerMs` and `sourceCharsLexed`, the parser cost that was previously
+invisible. `sourceCharsLexed` grows ~O(n²) across a stream of n chunks — that
+shape is the real streaming cost, and the old metrics obscured it.
 
 ## Contributing a panel: the plugin protocol (0.9.0)
 

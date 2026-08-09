@@ -30,9 +30,22 @@ Read `references/ui-recipes.md` for patterns and snippets.
   legacy `globalX`/`globalY` coordinates.
 - As of `@vectojs/ui@2.0.0`, `Markdown` and `CodeBlock` are the standalone
   `@vectojs/markdown` package (import `from '@vectojs/markdown'`, not
-  `@vectojs/ui`). `marked` + MathJax load only when you use it, so plain `ui`
-  apps no longer pay for them.
-- Use `RichText.appendSpans()` and `Markdown.appendMarkdown()` for streaming output.
+  `@vectojs/ui`). `marked` loads only when you use it, so plain `ui` apps no
+  longer pay for it.
+- **TeX math is typeset by `@vectojs/tex`, not MathJax.** `@vectojs/tex` is a
+  zero-DOM vendored KaTeX parse/layout kernel plus a self-contained SVG emit
+  layer; `mathjax-full` is no longer a dependency of any package. It is imported
+  dynamically on the first formula, so the first one on a page renders as TeX
+  source for a moment and is replaced when the module resolves. The public API
+  is still spelled `preloadMathJax()` / `isMathJaxReady()` — those names are
+  deliberately retained history meaning "the math engine, whichever one it is",
+  and renaming them would break every consumer for cosmetics. Await
+  `preloadMathJax()` if you need the very first formula typeset synchronously.
+- Use `Markdown.createStream()` for token/LLM streams and
+  `RichText.appendSpans()` for span-level appends. Prefer `createStream()` over
+  hand-rolled `appendMarkdown()` batching: it coalesces writes per animation
+  frame, applies backpressure, and `await close()` resolves only once the final
+  chunk has been parsed. See vectojs-performance's `references/streaming-recipes.md`.
 - Text, RichText, and Table cell text (from `@vectojs/ui`) and `Markdown`/`CodeBlock` (from `@vectojs/markdown`) are natively selectable by default. Configure `selectable` or call `setSelectable()`; do not implement canvas clipboard or selection handles for static text.
 - On `@vectojs/ui@1.9.0+` with `@vectojs/core@1.8.0+`, wrapped Text/RichText projections preserve logical
   source across soft spaces, hard breaks, space-less CJK wraps, and Arabic/RTL
@@ -57,13 +70,13 @@ Composite widgets project **one role per visible child** with a roving tabindex 
 the whole widget is a single tab stop and arrow keys move within it. Don't
 reimplement any of this:
 
-| Component | Child role | Keys |
-| --- | --- | --- |
-| `TreeView` | `treeitem` (+ level/expanded/selected) | Up/Down · Right expands then enters · Left collapses then goes to parent · Home/End · Enter/Space |
-| `Table` | `row` › `gridcell`/`columnheader` | 2D arrows (header is row −1) · Home/End row extremes · Ctrl+Home/Ctrl+End grid corners |
-| `ContextMenu` | `menuitem` (+ haspopup/expanded) | Up/Down wrap and skip separators + disabled · Home/End · Right opens submenu · Left returns to parent · Enter/Space · Escape |
-| `RadioGroup` | `radio` | Arrows move+select · Home/End · Space |
-| `Tabs` | `tab` | Arrows · Home/End · Space/Enter |
+| Component     | Child role                             | Keys                                                                                                                         |
+| ------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `TreeView`    | `treeitem` (+ level/expanded/selected) | Up/Down · Right expands then enters · Left collapses then goes to parent · Home/End · Enter/Space                            |
+| `Table`       | `row` › `gridcell`/`columnheader`      | 2D arrows (header is row −1) · Home/End row extremes · Ctrl+Home/Ctrl+End grid corners                                       |
+| `ContextMenu` | `menuitem` (+ haspopup/expanded)       | Up/Down wrap and skip separators + disabled · Home/End · Right opens submenu · Left returns to parent · Enter/Space · Escape |
+| `RadioGroup`  | `radio`                                | Arrows move+select · Home/End · Space                                                                                        |
+| `Tabs`        | `tab`                                  | Arrows · Home/End · Space/Enter                                                                                              |
 
 Those hotspots carry `pointerEvents: 'none'` so the component underneath keeps
 the mouse (selectable cell text, tap-to-toggle, drag-to-scroll). Keyboard focus

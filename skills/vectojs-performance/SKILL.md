@@ -28,18 +28,19 @@ and is NOT optional for LLM-speed streams.
 
 ## Decision matrix
 
-| Symptom                                                                                                               | Likely area               | First fix                                                                                                                                                                                                              |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Idle page uses CPU                                                                                                    | render loop               | `scene.renderMode = 'onDemand'`, auto-throttle, avoid timers. A canvas scrolled fully **off-screen already auto-pauses** the rAF loop (IntersectionObserver) — don't hand-roll that.                                   |
-| Resize or stream stalls                                                                                               | layout/text               | hot width/content APIs, incremental append, debounce app compute                                                                                                                                                       |
-| Streaming jank (chat/logs)                                                                                            | append cadence            | batch tokens per rAF, one `Markdown` per message, `VirtualList` history — see `references/streaming-recipes.md`                                                                                                        |
-| Many rows/items slow                                                                                                  | entity count              | `VirtualList`, `Table` `viewportHeight` virtualization, culling, aggregate decorative shapes                                                                                                                           |
-| Pointer feels delayed                                                                                                 | hit-test/event            | spatial hash boundaries, fewer overlapping interactive nodes                                                                                                                                                           |
-| 100k points slow                                                                                                      | renderer                  | WebGL point backend if draw cost dominates. Quad batches are indexed since core 1.16.2 (4 verts + shared static index buffer, 3-5x less submit time); below ~35-50k quads/frame the JS vertex fill dominates, above it the GPU submit does — then cull/virtualize rather than tune the fill.                                     |
+| Symptom                                                                                                                      | Likely area               | First fix                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Idle page uses CPU                                                                                                           | render loop               | `scene.renderMode = 'onDemand'`, auto-throttle, avoid timers. A canvas scrolled fully **off-screen already auto-pauses** the rAF loop (IntersectionObserver) — don't hand-roll that.                                                                                                                        |
+| `onDemand` scene never sleeps                                                                                                | dirty attribution         | Don't bisect `markDirty()` by hand. `scene.setDirtyTracking(true)`, run it, then read `scene.dirtyReasons` — or `diagnoseDirty(scene)` from `@vectojs/devtools/headless` for a verdict naming the every-frame cause.                                                                                        |
+| Resize or stream stalls                                                                                                      | layout/text               | hot width/content APIs, incremental append, debounce app compute                                                                                                                                                                                                                                            |
+| Streaming jank (chat/logs)                                                                                                   | append cadence            | batch tokens per rAF, one `Markdown` per message, `VirtualList` history — see `references/streaming-recipes.md`                                                                                                                                                                                             |
+| Many rows/items slow                                                                                                         | entity count              | `VirtualList`, `Table` `viewportHeight` virtualization, culling, aggregate decorative shapes                                                                                                                                                                                                                |
+| Pointer feels delayed                                                                                                        | hit-test/event            | spatial hash boundaries, fewer overlapping interactive nodes                                                                                                                                                                                                                                                |
+| 100k points slow                                                                                                             | renderer                  | WebGL point backend if draw cost dominates. Quad batches are indexed since core 1.16.2 (4 verts + shared static index buffer, 3-5x less submit time); below ~35-50k quads/frame the JS vertex fill dominates, above it the GPU submit does — then cull/virtualize rather than tune the fill.                |
 | Thousands of repeated short text runs/frame (danmaku, chat/log tails, particle labels), high frame times while GPU sits idle | render (fillText shaping) | `TextRasterCache` (core ≥ 1.12.0): rasterize each `(font,color,text)` run once, blit with `drawImage`. If swapping fillText↔drawImage doesn't move the **shaping phase time**, the wall is draw-count/overdraw — batch to WebGL/MSDF. Don't judge this by FPS: it's vsync-capped and won't move either way. |
-| Particle simulation slow                                                                                              | compute                   | WebGPU only if compute is parallel and supported                                                                                                                                                                       |
-| Memory grows after navigation                                                                                         | lifecycle                 | `scene.destroy()`, remove observers/timers, dispose adapters/export jobs                                                                                                                                               |
-| Animation steps/stutters only when the page is otherwise idle                                                         | throttle visibility       | The entity animates from `update()` without overriding `hasPendingAnimations()` — the idle throttle can't see it. Use `setTransition`/`springTo`, or override it.                                                      |
+| Particle simulation slow                                                                                                     | compute                   | WebGPU only if compute is parallel and supported                                                                                                                                                                                                                                                            |
+| Memory grows after navigation                                                                                                | lifecycle                 | `scene.destroy()`, remove observers/timers, dispose adapters/export jobs                                                                                                                                                                                                                                    |
+| Animation steps/stutters only when the page is otherwise idle                                                                | throttle visibility       | The entity animates from `update()` without overriding `hasPendingAnimations()` — the idle throttle can't see it. Use `setTransition`/`springTo`, or override it.                                                                                                                                           |
 
 ## Already handled by the engine (don't re-solve)
 
@@ -61,7 +62,7 @@ before optimizing:
 **WASM acceleration** is opt-in and invisible: `enableWasmTransforms` /
 `enableWasmParticles` with `coreWasmUrl`. JS is the permanent fallback and stays
 bit-identical, so enabling it is never a behavior change. Measured 2–4× on the
-transform/AABB and particle kernels; it is *not* a fix for draw-count or
+transform/AABB and particle kernels; it is _not_ a fix for draw-count or
 overdraw problems.
 
 **Measured and deliberately NOT optimized** — don't "fix" these without new
@@ -70,6 +71,40 @@ depth 50), `Tabs` per-frame visibility scan (2µs/frame at 60 tabs),
 `MSDFFont.layout` (already 8–15M chars/s; its cost is JS result-object
 allocation, which a WASM kernel cannot remove), and the `LayoutWorker`
 (off-thread + 50ms debounced, so it never touches frame time).
+
+## Content projection: two margins, one budget
+
+Static-text projection has **two independent margins**, and conflating them is
+the classic mistake. `contentProjectionMargin` decides whether a block's
+per-line **carriers** are windowed (the interaction band). `contentSemanticMargin`
+decides whether the block has **any DOM at all**.
+
+That split is what makes a resident tier expressible: `contentSemanticMargin:
+Infinity` with a finite `contentProjectionMargin` keeps one element per block
+holding its full text — so find-in-page and screen-reader read-ahead see the
+whole document — while only near-viewport blocks pay for carriers. `Infinity` is
+safe for the semantic margin and remains **unsupported** for the interaction
+margin, where it is O(total document glyphs).
+
+A resident tier's cost is per node **created**, not per node held, and it lands
+as one synchronous first sync. Measured `firstSyncMs` at 3 lines/block, resident
+vs native (Chrome 151 / Firefox 153, both at 240 Hz panel rate):
+
+| blocks | Chrome          | Firefox         |
+| ------ | --------------- | --------------- |
+| 100    | 10.3ms (1.6×)   | 5.0ms (1.1×)    |
+| 1000   | 20.6ms (4.5×)   | 16.0ms (5.3×)   |
+| 10000  | 146.6ms (19.9×) | 144.8ms (21.4×) |
+
+Cost is linear in nodes created at ~13µs each, so this is what creating the DOM
+costs, not a projection defect. `contentSemanticBudget` (default 256) caps how
+many resident blocks materialize per sync, spreading that stall across frames;
+the end state is identical, only later. `Infinity` restores one synchronous pass.
+
+Editing is **not** a problem — one block rebuilds and the rest skip via
+`getContentEpoch()`, measured 0.71–1.81× native at 10k blocks. Only the one-time
+build cost is worth engineering around. Set `contentProjection: false` only for
+genuinely decorative scenes, which skips the sync walk entirely.
 
 ## Compute greater than render
 
@@ -80,13 +115,21 @@ Worker/WebGPU path when the data shape fits.
 
 ## Verification
 
-Use production-like builds and record exact commands. In the VectoJS monorepo:
+Use production-like builds and record exact commands. In the VectoJS monorepo
+only the **headed** runners produce quotable figures:
 
 ```bash
-bun run benchmark
-bun run compare:dom
-bun run compare
+./benchmarks/run-browsers.sh    # headed, focused window, real GPU — quotable
+./comparisons/run-browsers.sh   # head-to-head against other libraries — quotable
+bun run benchmark               # headless --disable-gpu: regression tripwire ONLY
+bun run compare:dom             # headless CDP layout/style/heap comparison
+bun run compare                 # headless text-layout comparison
 ```
+
+`bun run benchmark` measures software rasterization in a throttled, invisible
+tab. It is useful for detecting a same-environment regression and must never be
+cited as a performance number. Never hardcode a refresh rate in a benchmark;
+call `calibrateRefreshRate()` and report `refreshHz`.
 
 Treat demo entity counts as workload examples, not universal promises.
 
@@ -111,7 +154,7 @@ generally doesn't expose it, and on Chrome it is often present but returns
 unavailable/disjoint on every trial.
 
 **Don't quote Node/Bun microbenchmark figures as browser results.** They are the
-right tool for *isolating a cause* and the wrong one for a headline number: one
+right tool for _isolating a cause_ and the wrong one for a headline number: one
 change measured 12.4x under Bun/JSC and 3.2-4.7x in real browsers, ~3x
 optimistic. The browser is the runtime that ships.
 
