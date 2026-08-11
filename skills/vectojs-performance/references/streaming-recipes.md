@@ -79,20 +79,30 @@ function pushToken(token: string) {
 - `Text.append(chunk)` — cold pass, but the engine's paragraph memo reuses
   every finished `\n`-terminated paragraph. One endless run-on line (no `\n`)
   defeats the memo → O(document) re-measure per flush. Don't strip newlines.
-- `Markdown.appendMarkdown(chunk)` — re-lexes the WHOLE accumulated source
-  (O(document), off-thread via embedded-blob Worker when `Worker` exists;
-  sync fallback otherwise), then prefix-diffs tokens by raw source: finished
-  block entities are reused by instance, a growing last paragraph updates its
-  spans in place.
+- `Markdown.appendMarkdown(chunk)` — re-lexes only the **unstable tail**:
+  the incremental lexer (`lexAppend`, 0.8.1+) keeps a stable block boundary and
+  re-lexes text after it, splicing onto the already-stable token prefix
+  (off-thread via embedded-blob Worker when `Worker` exists; sync fallback
+  otherwise), then prefix-diffs tokens by raw source: finished block entities
+  are reused by instance, a growing last paragraph updates its spans in place.
+  Exception: a document with link-reference definitions or line-start `$$`
+  math falls back to a whole-document lex (`lexFull`) — the boundary rule is
+  unsafe there. One endless run-on line (no `\n`) defeats the **paragraph**
+  memo on the render side — don't strip newlines.
 - `RichText.appendSpans(spans)` — appends; prior spans' measurements reused.
 - `setText` / `setContent` with the full accumulated document — anti-pattern,
   rebuilds everything, reuses nothing.
 
 The lexer cost is the one to watch, and it is now measurable rather than
 inferred. `@vectojs/devtools` 0.11.0 reports `lexerMs` and `sourceCharsLexed`
-from `inspectMarkdownStream` / `formatMarkdownStream`; `sourceCharsLexed` grows
-~O(n²) across a stream of n chunks. The reuse counters were renamed in the same
-release because the old names implied the lexer was being skipped:
+from `inspectMarkdownStream` / `formatMarkdownStream`; `sourceCharsLexed`
+tracks the unstable tail under `lexAppend` (≈O(1) per chunk for a
+stable-boundary stream) and only the `lexFull` fallback documents grow ~O(n²)
+across n chunks. A `sourceCharsLexed` that grows with the whole document
+length is the signature of the fallback path — or of stripping the boundary
+(the empty-line / paragraph-memo traps above). The reuse counters were
+renamed in the same release because the old names implied the lexer was being
+skipped:
 `tokensReused` → `tokensPrefixMatched`, `tokensRelexed` → `tokensReturned`,
 `reuseRatio` → `tokenPrefixReuseRatio`. The old names are gone, not aliased.
 

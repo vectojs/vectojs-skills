@@ -11,10 +11,11 @@ Use this skill to build canvas-native VectoJS scenes that remain accessible, aut
 
 1. Confirm installed package versions and inspect local source/docs when exact API behavior matters.
 2. Start from `@vectojs/core` primitives: one `Scene` per canvas, `Entity` subclasses for custom drawing, and the built-in `Rect`/`Circle`/`Group` shape primitives (1.9.0+) for plain boxes, dots, and transform containers — no subclass needed.
-3. Use world/local coordinate conversion in hit tests. Do not subtract only `this.x` once nested transforms, scale, or rotation are possible.
-4. Expose semantics for interactive entities with `getA11yAttributes()`.
-5. Prefer `scene.renderMode = 'onDemand'` for static or event-driven UI; call `scene.markDirty()` after external mutations.
-6. Always call `scene.destroy()` when the host framework unmounts.
+3. **Develop with `@vectojs/devtools` attached.** Add the dep and gate `attachDevtools(scene, …)` behind a `?debug` query flag so it never ships; the headless layer (`pickInScene`, `inspectEntity`, `auditScene`, `auditSceneSelection`, `diagnoseDirty`, `inspectText`) is the fast path for verifying geometry/state in tests and agent loops without the panel. One devtools instance per inspected Scene; detach on unmount.
+4. Use world/local coordinate conversion in hit tests. Do not subtract only `this.x` once nested transforms, scale, or rotation are possible.
+5. Expose semantics for interactive entities with `getA11yAttributes()`.
+6. Prefer `scene.renderMode = 'onDemand'` for static or event-driven UI; call `scene.markDirty()` after external mutations.
+7. Always call `scene.destroy()` when the host framework unmounts.
 
 For copyable examples, read `references/scene-recipes.md`.
 

@@ -273,11 +273,13 @@ divergence as none.
   Since 0.11.0 the token fields are named for what they measure —
   `tokensPrefixMatched`, `tokensReturned`, `tokenPrefixReuseRatio` — and
   `lexerMs` / `sourceCharsLexed` report the parser cost that was invisible
-  before. `marked` has no incremental lexing API, so every chunk re-lexes the
-  whole accumulated source and `sourceCharsLexed` grows ~O(n²) over a stream.
-  The old names (`tokensReused`, `tokensRelexed`, `reuseRatio`) were removed
-  rather than aliased: they read as though a high match rate meant less lexing,
-  which it never did.
+  before. The worker lexes **incrementally** (0.8.1+): `lexAppend` keeps a
+  stable block boundary and re-lexes only the unstable tail, so
+  `sourceCharsLexed` tracks the tail — unless the document uses link-reference
+  definitions or line-start `$$` math, which fall back to a whole-document
+  `lexFull` (the ~O(n²) shape). The old names (`tokensReused`, `tokensRelexed`,
+  `reuseRatio`) were removed rather than aliased: they read as though a high
+  match rate meant less lexing, which it never did.
 - `inspectGpu(scene)` — backend `kind`, Canvas2D draw counters (opt-in via
   `setDrawCounters(true)`), WebGL draw calls and the POINTS-vs-quad circle split,
   WebGPU state, plus phase timings when `setPhaseTiming(true)` is on.
@@ -343,9 +345,11 @@ Tracking is opt-in, so leave it off in production.
 ## Markdown stream metrics were renamed in 0.11.0
 
 If you read `inspectMarkdownStream` or the `low-token-reuse` finding, three
-fields changed name — and they changed because the old names misled. `marked` has
-no incremental lexing API, so the worker re-lexes the **whole accumulated source**
-on every chunk; the old names implied a high match rate meant less lexing.
+fields changed name — and they changed because the old names misled. `marked`
+itself has no incremental lexing API, but VectoJS's worker wraps it: since
+0.8.1 `lexAppend` keeps a stable block boundary and re-lexes only the unstable
+tail (whole-document `lexFull` remains only for link-reference / line-start
+`$$` documents); the old names implied a high match rate meant less lexing.
 
 | before          | after                   | what it actually counts                         |
 | --------------- | ----------------------- | ----------------------------------------------- |
@@ -355,8 +359,11 @@ on every chunk; the old names implied a high match rate meant less lexing.
 
 No aliases were kept: the defect was that they mislead. `MarkdownStreamInfo` also
 gains `lexerMs` and `sourceCharsLexed`, the parser cost that was previously
-invisible. `sourceCharsLexed` grows ~O(n²) across a stream of n chunks — that
-shape is the real streaming cost, and the old metrics obscured it.
+invisible. Under the incremental path `sourceCharsLexed` tracks the unstable
+tail (~O(1) per chunk for a stable-boundary stream); only the `lexFull`
+fallback documents grow ~O(n²) across n chunks — a `sourceCharsLexed` that
+tracks the whole document length is the signature of that fallback, and the
+old metrics obscured it.
 
 ## Contributing a panel: the plugin protocol (0.9.0)
 

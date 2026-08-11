@@ -41,7 +41,7 @@ you can print and assert. Work in this order:
 
 1. **Read the tree.** `scene.getA11yTree()` returns the semantic snapshot
    (roles, labels, values, hierarchy). Wrong structure here = wrong structure
-   on screen, found without rendering anything. It reports what is *projected*:
+   on screen, found without rendering anything. It reports what is _projected_:
    an entity is absent unless `interactive` and it has a box (or
    `a11yFullViewport`), so an empty or short tree is often a missing opt-in
    rather than a structural bug.
@@ -79,3 +79,9 @@ Build/runtime contracts → **vectojs-core-runtime** · layout →
 **vectojs-responsive-layout** · motion → **vectojs-ui-animation** · speed →
 **vectojs-performance** · 3D/XR → **vectojs-three** · MP4 export →
 **vectojs-video-exporter**.
+
+A declarative style layer (`@vectojs/styles`) is planned on top of the numeric
+VMT — typed style objects + `applyStyle()` mapped to entity fields, **never** a
+CSS string parser (a parser would reintroduce the cascade/global state the
+numeric VMT exists to remove). Until it ships, styling stays numeric entity
+fields; the token-layer precedent lives in `markdown/src/theme.ts`.
