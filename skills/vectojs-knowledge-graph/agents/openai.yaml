@@ -1,0 +1,4 @@
+interface:
+  display_name: "VectoJS Knowledge Graph"
+  short_description: "Build 2D knowledge-graph visualizations with VectoJS"
+  default_prompt: "Use $vectojs-knowledge-graph to build or debug a 2D node-link graph app."
