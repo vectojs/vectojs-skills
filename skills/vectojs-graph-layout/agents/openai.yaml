@@ -1,0 +1,6 @@
+interface:
+  display_name: "VectoJS Graph Layout"
+  short_description: "Build and tune renderer-agnostic 2D graph layouts"
+  default_prompt: >-
+    Use $vectojs-graph-layout to build, migrate, or profile a
+    renderer-agnostic 2D force-directed graph.
