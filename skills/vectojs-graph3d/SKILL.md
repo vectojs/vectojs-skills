@@ -10,6 +10,10 @@ geometry and keeps layout strictly separate from rendering. Its only peer is
 `three`; it does **not** depend on `@vectojs/three` or `@vectojs/core`, so a
 graph can be dropped into a plain Three.js app. (`@vectojs/three` becomes
 relevant only if you also want VectoJS UI panels in the same 3D scene.)
+For renderer-agnostic true 2D physics, use `@vectojs/graph-layout` and read
+`vectojs-graph-layout`. Both packages use host-driven `step()` calls that return
+true while the simulation remains active and false once cooled; their XY and
+XYZ buffers are not interchangeable.
 
 ## Architecture: layout and renderer are decoupled
 
@@ -25,9 +29,9 @@ const layout = new VectoForceLayout();
 layout.setGraph({ nodes, links });
 
 function frame() {
-  const settled = layout.step(); // advance the simulation
+  const active = layout.step(); // advance the simulation
   graph.applyPositions(layout.positions); // xyz triplets in node order
-  if (!settled) requestAnimationFrame(frame);
+  if (active) requestAnimationFrame(frame);
 }
 ```
 
@@ -42,7 +46,8 @@ function frame() {
 ## Choosing a layout
 
 Both implement the same `GraphLayout` contract (`setGraph`, `step(iterations?)`
-returning "settled", `positions`, and optional `pinNode`/`unpinNode`/`reheat`),
+returning true while active, `positions`, and optional
+`pinNode`/`unpinNode`/`reheat`),
 so they are drop-in swappable.
 
 |              | `VectoForceLayout`                                                                                | `D3ForceLayout`       |
@@ -68,8 +73,8 @@ Defaults are chosen so linked nodes settle closer than unlinked ones:
   and looser. Raise it before lowering node count.
 - `alphaDecay` (0.0228) — d3's default, ~300 ticks to cool.
 
-`step()` returns `true` once cooled. Call `reheat()` after a topology or pin
-change instead of rebuilding the layout.
+`step()` returns `true` while active and `false` once cooled. Call `reheat()`
+after a topology or pin change instead of rebuilding the layout.
 
 ## Interaction
 

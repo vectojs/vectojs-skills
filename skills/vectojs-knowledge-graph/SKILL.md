@@ -1,14 +1,14 @@
 ---
 name: vectojs-knowledge-graph
-description: Use when building or debugging a 2D node-link knowledge-graph visualization on @vectojs/core — batch-painted graph layers, d3-force layout, node/edge/label rendering, hover hit-testing, camera pan/zoom, and especially when a graph app is laggy, stuck at a crawling frame rate, or never sleeps when idle.
+description: Use when building or debugging a 2D node-link knowledge-graph visualization on @vectojs/core - batch-painted graph layers, @vectojs/graph-layout physics, node/edge/label rendering, hover hit-testing, camera pan/zoom, and especially when a graph app is laggy or never sleeps when idle.
 ---
 
 # VectoJS Knowledge Graph (2D)
 
 Patterns for canvas-native 2D knowledge-graph apps (node-link graphs with
-search, drawers, hover tooltips, pan/zoom) on `@vectojs/core`. For the 3D
-instanced package, read `vectojs-graph3d`; for profiling method, read
-`vectojs-performance`.
+search, drawers, hover tooltips, pan/zoom) on `@vectojs/core`. Read
+`vectojs-graph-layout` for 2D physics, `vectojs-graph3d` for the 3D instanced
+package, and `vectojs-performance` for profiling method.
 
 ## Architecture: one scene node batch-paints the graph
 
@@ -35,11 +35,11 @@ The engine's idle management assumes state changes REACH it. When you draw
 imperatively inside `render()` and mutate your model from window/canvas
 listeners, nothing is marked dirty, so:
 
-| Symptom                                                      | Mechanism                                                                                                                                                                                     | Correct fix                                                                                                                                                                                                                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Everything runs at ~2 FPS even while hovering/panning/zooming | `autoThrottle` (default on) throttles an idle scene to its `idleFPS` floor — a hard 2 FPS before core 1.36.0, 60 FPS since — and `dirty`/`frameHadAnimation` never become true because you never called `markDirty()` and don't override `hasPendingAnimations()` | `renderMode: 'onDemand'` + `scene.markDirty()` on every state mutation (hover set, pan, zoomAt, camera-animation step, physics step, expand/rebuild, ripple/pulse phases) — or override `hasPendingAnimations()` to report true while physics/ripples/camera run |
-| "Fixed" with `autoThrottle: false` but CPU burns forever     | Always-mode renders the full canvas every frame, idle included                                                                                                                                | That option exists for genuinely continuous content (danmaku). A settled graph must sleep                                                                                                                                                                        |
-| Hover tooltip lags one interaction behind                    | Hover state set but frame never scheduled                                                                                                                                                     | `markDirty()` inside the hover setter                                                                                                                                                                                                                            |
+| Symptom                                                       | Mechanism                                                                                                                                                                                                                                                         | Correct fix                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Everything runs at ~2 FPS even while hovering/panning/zooming | `autoThrottle` (default on) throttles an idle scene to its `idleFPS` floor — a hard 2 FPS before core 1.36.0, 60 FPS since — and `dirty`/`frameHadAnimation` never become true because you never called `markDirty()` and don't override `hasPendingAnimations()` | `renderMode: 'onDemand'` + `scene.markDirty()` on state mutations (hover, pan, zoom, expansion, active physics/camera/ripple steps) — but do not re-arm a cooled Scene-driven physics loop; or override `hasPendingAnimations()` only while work remains |
+| "Fixed" with `autoThrottle: false` but CPU burns forever      | Always-mode renders the full canvas every frame, idle included                                                                                                                                                                                                    | That option exists for genuinely continuous content (danmaku). A settled graph must sleep                                                                                                                                                                |
+| Hover tooltip lags one interaction behind                     | Hover state set but frame never scheduled                                                                                                                                                                                                                         | `markDirty()` inside the hover setter                                                                                                                                                                                                                    |
 
 Measured on a real deployment (omm, 2026-08-15): a graph app whose hover/pan/
 zoom never mark dirty rendered **16–17 frames per 8s (~2 FPS)** while the user
@@ -62,18 +62,31 @@ was actively interacting, with rAF itself at 240Hz and per-frame render cost
 
 ## Physics (force layout)
 
-d3-force on the main thread is fine to a few thousand nodes — `forceManyBody`
-and `forceCollide` are quadtree-based (O(n log n) per tick), not O(n²).
+Default to `ForceLayout2D` from `@vectojs/graph-layout` for 2D. It is
+renderer-agnostic, dependency-free, uses a true 2D Barnes-Hut quadtree, supports
+collision/accessor forces, and preserves simulation state across
+`appendGraph()` and `removeNodes()`. Read `vectojs-graph-layout` for the full API,
+input rules, d3 migration, complexity, and measurement guidance.
 
-- Tick INSIDE the frame (`step()` from render/update), not on a timer; reheat
-  with `alpha(max(alpha, 0.3..0.6))` on expand/select, `alphaDecay` ~0.02–0.03.
-- Rebuild the simulation only when the topology changes (expand), never per
-  frame; map links to node objects so d3 mutates them in place.
-- Drag: set `fx/fy` on pointer-down, clear on pointer-up; reheat slightly so
-  neighbors react.
-- Above a few thousand nodes, move the simulation to a Worker or use
-  `VectoForceLayout` from `@vectojs/graph3d` (in-house Barnes-Hut, layout and
-  renderer decoupled — see that skill).
+- Step once per host frame. `step()` returns `true` **while active**. When a
+  Scene `update()` drives physics, call `scene.markDirty()` only while true;
+  marking dirty from every cooled update prevents `renderMode: 'onDemand'` from
+  sleeping. An external scheduler may render the final false-returning mutation
+  once, but it must then stop invoking the physics callback.
+- Use `appendGraph()` for expansion and `removeNodes()` for deletion instead of
+  rebuilding. Reacquire the live `positions` view after every topology method,
+  and rebuild cached node-index mappings after replacement or removal. Append
+  preserves existing indices.
+- Drag with `pinNode(index, x, y)` / `unpinNode(index)`, call `reheat()`, and
+  `markDirty()` on every move or pin-state change.
+- Existing d3-force apps can migrate incrementally: stop d3's timer, retain
+  host-controlled ticks, convert negative charge to positive `repulsion`, use
+  primitive endpoint IDs, and map `fx`/`fy` to pins. d3's `velocityDecay` is
+  loss while graph-layout's is retention, so start with `1 - d3VelocityDecay`.
+- If d3 remains temporarily, keep its quadtree `forceManyBody`/`forceCollide`,
+  rebuild only on topology changes, and preserve this same VectoJS
+  `markDirty()`/`onDemand` contract. Do not use `@vectojs/graph3d` physics as a
+  2D substitute.
 
 ## Rendering ladder (pick by measured draw cost, not by guess)
 
