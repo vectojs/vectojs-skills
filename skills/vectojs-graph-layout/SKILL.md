@@ -5,7 +5,7 @@ description: Use when building, migrating, tuning, or profiling a renderer-agnos
 
 # VectoJS Graph Layout
 
-Use `@vectojs/graph-layout@0.1.0` for dependency-free 2D graph physics. It owns
+Use `@vectojs/graph-layout@0.2.0` for dependency-free 2D graph physics. It owns
 no renderer, canvas, scene, or timer: the host supplies graph data, calls
 `step()`, and reads interleaved XY coordinates.
 
@@ -165,7 +165,7 @@ Warm each arm, rotate comparison order, isolate mutations from payload creation,
 and compare equivalent dimensions and force models. Do not use FPS as the
 physics metric.
 
-There is no WASM backend in `@vectojs/graph-layout@0.1.0`. Keep WASM deferred
+There is no WASM backend in `@vectojs/graph-layout@0.2.0`. Keep WASM deferred
 until headed Chrome and Firefox evidence shows this JS layout is the bottleneck
 and a representative WASM prototype wins end to end, including boundary and
 memory costs. Existing cross-dimensional comparisons against 3D layouts are
