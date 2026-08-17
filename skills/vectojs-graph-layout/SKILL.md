@@ -123,8 +123,16 @@ releases selected axes; omit the axes object to release both. `pinNode()` and
 `unpinNode()` remain both-axis conveniences. Invalid indices are no-ops.
 Initial finite `fx` and `fy` values can independently pin one axis.
 
-Pinning does not itself raise alpha. Call `reheat()` after a pin, drag move, or
-unpin; `reheat(alpha = 0.3)` never lowers the current alpha. In an on-demand
+Pinning does not itself raise alpha. Call `reheat()` after a pin or unpin;
+`reheat(alpha = 0.3)` never lowers the current alpha. **Reheat once at drag
+start, never on every pointer move** — reheating per move keeps alpha pinned
+near max, so the dragged node's neighbors keep overshooting their springs and
+the whole neighborhood keeps vibrating for several seconds after release (alpha
+decays at ~`alphaDecay` per tick ≈ 5 s at 60 fps), which reads as jitter and
+text-label ghosting. Update the pin position each move; `reheat()` only for
+topology changes, explicit wake-ups, and drag start. If a gentle follow during
+the drag is wanted, raise `velocityDecay` (damping) instead of reheating. In an
+on-demand
 VectoJS scene whose `update()` drives physics, call `scene.markDirty()` only
 while `step()` returns true; marking dirty again from every cooled update creates
 an infinite render loop. If an external scheduler drives physics, render the
