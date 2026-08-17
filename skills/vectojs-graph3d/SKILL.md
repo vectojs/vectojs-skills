@@ -97,7 +97,10 @@ a `THREE.Vector3` you own (returns `null` for an out-of-range index).
   resources and listeners.
 - **Assuming `positions` is a copy.** It's the live buffer; copy it if you need a
   snapshot.
-- **Reaching for a WASM kernel.** Deliberately not built — see below.
+- **Assuming the WASM kernel is always worth enabling.** It is an opt-in
+  accelerator with an identical-output JS fallback (see "WASM force kernel");
+  for small graphs the JS tick already fits the frame budget, and the WASM win
+  is bounded (~1.4–1.5× on the force phase).
 
 ## Performance notes (measured)
 
@@ -109,13 +112,31 @@ a `THREE.Vector3` you own (returns `null` for an out-of-range index).
   (`nodeRadius × cbrt(val)`). Net 2.3–3.2× faster.
 - `linkLines` sets `frustumCulled = false` (a line set spanning the whole graph
   is never meaningfully cullable); `nodeMesh` keeps culling **on**.
-- **A Rust/WASM force kernel is deliberately deferred.** The JS Barnes-Hut is
-  already 4–8× over d3; a kernel would need either a bad dependency direction
-  (graph3d → heavy `@vectojs/core`, just to load a wasm URL) or a whole new
-  crate + CI wiring, and the per-frame octree is data-dependent, so
-  bit-identical cross-engine differential testing is materially harder than for
-  the transform/particle kernels. Don't start one without a measurement showing
-  the JS layout is the bottleneck.
+
+## WASM force kernel (opt-in)
+
+`VectoForceLayout` ships an optional Rust/WASM force kernel
+(`crates/vectojs-force-rs`, published as a co-located `vectojs_force.wasm` in
+`@vectojs/graph3d` — **no `@vectojs/core` dependency**, `three` stays the only
+peer). It accelerates the Barnes-Hut octree build + repulsion accumulation; the
+f32 integration, springs, and centering stay in JS.
+
+```ts
+import { forceWasmUrl } from "@vectojs/graph3d/wasm";
+await layout.enableWasmForce(forceWasmUrl); // streaming (browser): URL | Response
+// or, from raw bytes (Node/tests, no fetch):
+layout.enableWasmForceSync(bytes);
+```
+
+- `enableWasmForce(url | Response)` is async and fetches; `enableWasmForceSync(bytes)`
+  compiles bytes directly and never fetches. Both return `false` on any failure
+  (CSP, 404, corrupt module) and silently keep the identical-output JS Barnes-Hut.
+- The kernel is **bit-for-bit identical** to the JS path (both accumulate in
+  f64); the JS path is the permanent fallback and the differential oracle.
+- It is not automatically faster — it only matters once the JS tick misses the
+  frame budget (measured ~2000 nodes on a 240 Hz panel). The force-accumulate
+  phase is 78–90% of the tick, so the ceiling is ~1.4–1.5×, not an order of
+  magnitude.
 
 ## Verification
 
