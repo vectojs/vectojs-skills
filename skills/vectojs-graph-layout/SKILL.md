@@ -1,6 +1,6 @@
 ---
 name: vectojs-graph-layout
-description: Use when building, migrating, tuning, or profiling a renderer-agnostic 2D force-directed graph with @vectojs/graph-layout - ForceLayout2D, true 2D Barnes-Hut repulsion, collision and force accessors, incremental paging, live positions, pinning, reheating, and d3-force migration.
+description: Use when building, migrating, tuning, or profiling a renderer-agnostic 2D force-directed graph with @vectojs/graph-layout - ForceLayout2D, Barnes-Hut repulsion and cutoff, collision and force accessors, incremental node/link mutations, ID mappings, axis pins, reheating, and d3-force migration.
 ---
 
 # VectoJS Graph Layout
@@ -50,11 +50,11 @@ most 10,000 normalized iterations, and owns no scheduling.
 
 `positions` is a live `Float32Array` view. Its identity is stable across
 `step()` calls, but `setGraph()`, `appendGraph()`, and `removeNodes()` may
-replace the view or backing buffer. Read `layout.positions` again after every
-topology operation; copy it only when a historical snapshot is required.
-Rebuild any application-side ID-to-index map after `setGraph()` or
-`removeNodes()` because removal compacts survivors. Existing node indices remain
-stable across append-only updates.
+replace the view or backing buffer. Read `layout.positions` again after those
+operations; copy it only when a historical snapshot is required. Use
+`getNodeIndex(id)` and `getNodeId(index)` for current mappings, or
+`getNodeIds()` for a position-order snapshot. Removal compacts survivors;
+existing indices remain stable across append-only and link-only updates.
 
 Call `dispose()` when finished. Disposal is idempotent; later API use throws.
 
@@ -63,6 +63,9 @@ Call `dispose()` when finished. Disposal is idempotent; later API use throws.
 - Repulsion uses a true 2D Barnes-Hut quadtree. `theta` defaults to `0.9`;
   larger values trade accuracy for speed, while `0` requests exact O(N^2)
   repulsion.
+- `repulsionDistanceMax` limits many-body work to nearby nodes. It defaults to
+  `Infinity`; `0` disables repulsion. Tune it from graph-scale behavior and
+  headed-browser tick measurements, not as an assumed optimization.
 - `repulsion` and `collisionRadius` accept a number or `(node, index) => number`.
   `linkDistance` and `linkStrength` accept a number or
   `(link, globalIndex) => number`. Accessors run when items enter the layout,
@@ -72,17 +75,20 @@ Call `dispose()` when finished. Disposal is idempotent; later API use throws.
   after measuring overlap and tick cost.
 - Defaults are `repulsion: 300`, `collisionRadius: 0`, `collisionStrength: 1`,
   `linkDistance: 30`, `linkStrength: 0.3`, `centerStrength: 0.02`,
-  `velocityDecay: 0.6`, `theta: 0.9`, `alphaDecay: 0.0228`, `alphaMin: 0.001`,
-  and `seed: 1`.
+  `velocityDecay: 0.6`, `theta: 0.9`, `repulsionDistanceMax: Infinity`,
+  `alphaDecay: 0.0228`, `alphaMin: 0.001`, and `seed: 1`.
 - The seed gives deterministic initial placement for identical ordered input.
   Preserve node order and seed when testing replay or migration behavior.
 
 ## Incremental graph updates
 
-Use `setGraph()` for replacement, `appendGraph()` for pages or expansion, and
-`removeNodes(ids)` for deletion. Append and removal preserve surviving
-positions, velocities, and pins, then reheat automatically. Removal also drops
-incident links and compacts survivors in their previous relative order.
+Use `setGraph()` for replacement, `appendGraph()` for pages or expansion,
+`removeNodes(ids)` for node deletion, `removeLinks(items)` for edge deletion,
+and `updateLinks(links)` to re-resolve distance/strength accessors. Node append
+and removal preserve surviving positions, velocities, and pins, then reheat
+automatically. Node removal also drops incident links and compacts survivors in
+their previous relative order. Link-only mutation never changes node state or
+indices.
 
 `appendGraph()` is replay-safe:
 
@@ -95,6 +101,13 @@ incident links and compacts survivors in their previous relative order.
 - Links with unknown endpoints and self-links are ignored. Send a page's nodes
   and links together, or append links again after their endpoints exist.
 
+`removeLinks()` accepts full links matched by directed endpoints plus optional
+ID, or bare IDs that remove all identified links carrying that ID. It is
+idempotent and preserves survivor order and cached accessor values.
+`updateLinks()` validates the whole batch before mutation, ignores unmatched
+identities, and re-runs link accessors for matches. Endpoints define identity,
+so reroute with remove plus append rather than update.
+
 Validation is intentionally asymmetric. `setGraph()` throws on a malformed
 node ID or duplicate node ID without replacing the current graph.
 `appendGraph()` skips malformed, existing, and repeated nodes. Invalid links
@@ -104,9 +117,11 @@ when silent omission would hide a backend defect.
 
 ## Pinning and host scheduling
 
-`pinNode(index, x, y)` pins both axes, immediately updates the live position,
-and clears velocity. `unpinNode(index)` frees both axes. Invalid indices are
-no-ops. Initial finite `fx` and `fy` values can independently pin one axis.
+`setNodePin(index, { x?, y? })` pins supplied axes, immediately updates those
+live coordinates, and clears their velocity. `clearNodePin(index, { x?, y? })`
+releases selected axes; omit the axes object to release both. `pinNode()` and
+`unpinNode()` remain both-axis conveniences. Invalid indices are no-ops.
+Initial finite `fx` and `fy` values can independently pin one axis.
 
 Pinning does not itself raise alpha. Call `reheat()` after a pin, drag move, or
 unpin; `reheat(alpha = 0.3)` never lowers the current alpha. In an on-demand
@@ -126,7 +141,7 @@ the scene can sleep.
 - d3's `velocityDecay` is velocity loss; this package's value is retention.
   Start with `1 - d3VelocityDecay`, then retune from measurements.
 - Map d3 `fx`/`fy` data to initial pins, or use node indices with
-  `pinNode()`/`unpinNode()` during drag. Reheat explicitly instead of setting
+  `setNodePin()`/`clearNodePin()` during drag. Reheat explicitly instead of setting
   d3 alpha targets.
 - Do not expect exact trajectories. Centering and integration details differ;
   test invariants such as finite positions, pins, separation, determinism, and
@@ -138,7 +153,9 @@ For N nodes and M links, typical sparse-graph tick cost is O(N log N + M) for
 Barnes-Hut repulsion, springs, and quadtree collision traversal. Collision also
 depends on the number of nearby pairs; pathological overlap can approach
 O(N^2). Topology mutation is amortized by geometric typed-array growth;
-`removeNodes()` is O(N + M). Space is O(N + M).
+`removeNodes()` is O(N + M). `removeLinks()` is O(M + R) for full-link
+requests, or O(M + RM) in the worst case for R bare IDs; `updateLinks()` is
+O(M + U) for U updates. Space is O(N + M).
 
 Measure in real headed Chrome and Firefox with production-like graph shapes,
 degree distributions, collision radii, and page sizes. Report per-tick median

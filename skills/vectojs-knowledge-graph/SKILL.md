@@ -1,6 +1,6 @@
 ---
 name: vectojs-knowledge-graph
-description: Use when building or debugging a 2D node-link knowledge-graph visualization on @vectojs/core - batch-painted graph layers, @vectojs/graph-layout physics, node/edge/label rendering, hover hit-testing, camera pan/zoom, and especially when a graph app is laggy or never sleeps when idle.
+description: Use when building or debugging a 2D node-link knowledge graph with @vectojs/knowledge-graph/model and @vectojs/core - paginated expansion, cancellation, snapshots, batch-painted graph layers, @vectojs/graph-layout physics, interaction, and idle scheduling.
 ---
 
 # VectoJS Knowledge Graph (2D)
@@ -9,6 +9,48 @@ Patterns for canvas-native 2D knowledge-graph apps (node-link graphs with
 search, drawers, hover tooltips, pan/zoom) on `@vectojs/core`. Read
 `vectojs-graph-layout` for 2D physics, `vectojs-graph3d` for the 3D instanced
 package, and `vectojs-performance` for profiling method.
+
+## Renderer-neutral model and paging
+
+Use `KnowledgeGraphModel` from `@vectojs/knowledge-graph/model` when the app
+needs a bounded materialized cut of a large source graph. The subpath exposes
+domain types, `MemoryDataSource`, and model state without importing the
+session/rendering-facing package surface.
+
+```ts
+const model = new KnowledgeGraphModel({
+  source,
+  pageSize: 100,
+  direction: "both",
+  lang: "en",
+});
+
+await model.bootstrap(focusIds, false);
+await model.expand(focusIds[0]);
+draw(model.getGraphData());
+```
+
+- `KgDataSource.getNeighbors(id, { limit, cursor, direction, signal })` returns
+  one page plus optional `total`, `nextCursor`, and `hasMore`. Treat cursors as
+  opaque and propagate `signal` through backend I/O.
+- `expand(id)` loads one page. Same-ID concurrent calls share one promise;
+  different IDs may load concurrently. Call again from `partial` to resume.
+- Expansion status is `idle`, `loading`, `partial`, `complete`, `failed`, or
+  `cancelled`. `cancelExpand(id)` aborts active work; a later expand resumes at
+  the last completed cursor. Failed calls reject and can be retried.
+- Entities deduplicate by ID and merge labels. Facts deduplicate by the ordered
+  `(source, predicate, target)` triple. Use model counts and list methods rather
+  than maintaining a second materialized truth.
+- `exportSnapshot()` / `importSnapshot()` persist versioned graph and pagination
+  state. Import aborts requests and suppresses stale completions. Snapshots do
+  not serialize in-flight work or error objects.
+- Call `dispose()` to abort work and release state. Late completions cannot
+  repopulate a disposed model.
+
+The optional model `layout` is the XYZ `GraphLayout` contract from
+`@vectojs/graph3d`, not the XY `ForceLayout2D`. For this skill's 2D architecture,
+normally omit it and feed `model.getGraphData()` into your own `ForceLayout2D`
+adapter. Keep model entity order aligned with the layout and rendering arrays.
 
 ## Architecture: one scene node batch-paints the graph
 
@@ -22,7 +64,7 @@ cost at 5,000 items (~12fps) and is rebuilt every frame for nothing.
   hit-testing itself (it owns the badge rects the render pass computed anyway).
 - UI panels (header, drawer, minimap) are sibling entities ABOVE the graph
   layer; the graph layer sits directly on the background.
-- State lives in your own model (`nodes`, `links`, `Map`s keyed by id); the
+- State lives in `KnowledgeGraphModel` or one equivalent application model; the
   entity reads it every frame. This is the inverse of DOM habits but keeps one
   copy of the truth and makes culling/hit-test loops trivial.
 
@@ -73,12 +115,13 @@ input rules, d3 migration, complexity, and measurement guidance.
   marking dirty from every cooled update prevents `renderMode: 'onDemand'` from
   sleeping. An external scheduler may render the final false-returning mutation
   once, but it must then stop invoking the physics callback.
-- Use `appendGraph()` for expansion and `removeNodes()` for deletion instead of
-  rebuilding. Reacquire the live `positions` view after every topology method,
-  and rebuild cached node-index mappings after replacement or removal. Append
-  preserves existing indices.
-- Drag with `pinNode(index, x, y)` / `unpinNode(index)`, call `reheat()`, and
-  `markDirty()` on every move or pin-state change.
+- Use `appendGraph()` for expansion, `removeNodes()` for node deletion,
+  `removeLinks()` for edge deletion, and `updateLinks()` for force-property
+  changes. Reacquire the live `positions` view after node topology methods. Use
+  `getNodeIndex()` for current mappings; append and link-only mutation preserve
+  existing indices, while node removal compacts them.
+- Drag with `setNodePin(index, { x, y })` / `clearNodePin(index)`, call
+  `reheat()`, and `markDirty()` on every move or pin-state change.
 - Existing d3-force apps can migrate incrementally: stop d3's timer, retain
   host-controlled ticks, convert negative charge to positive `repulsion`, use
   primitive endpoint IDs, and map `fx`/`fy` to pins. d3's `velocityDecay` is
